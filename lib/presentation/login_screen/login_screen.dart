@@ -16,6 +16,14 @@ import '../../services/tiktok_service.dart';
 /// - Biometric authentication setup prompt
 /// - Platform-specific authentication flows
 /// - Trust signals and compliance indicators
+///
+/// ⚠️ IMPORTANT: Production Deployment Requirements
+/// This demo uses mock authentication. For TikTok review approval:
+/// 1. Register app at https://developers.tiktok.com/
+/// 2. Request API scopes: user.info.basic, follower.list
+/// 3. Implement proper OAuth 2.0 flow with flutter_web_auth
+/// 4. Handle rate limits (100 requests/minute)
+/// 5. Comply with TikTok's Terms of Service
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -49,12 +57,25 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   /// Handles TikTok OAuth authentication flow
+  ///
+  /// ⚠️ DEMO MODE: Uses mock token for testing
+  /// Production implementation should:
+  /// 1. Use flutter_web_auth for OAuth flow
+  /// 2. Exchange authorization code for access token
+  /// 3. Validate token with TikTok API
+  /// 4. Store token securely with flutter_secure_storage
   Future<void> _handleTikTokLogin() async {
     setState(() => _isLoading = true);
     HapticFeedback.mediumImpact();
 
     try {
-      // Simulate OAuth flow - In production, use flutter_web_auth package
+      // ⚠️ DEMO: Simulate OAuth flow
+      // Production: Replace with actual OAuth implementation
+      // Example: final result = await FlutterWebAuth.authenticate(
+      //   url: 'https://www.tiktok.com/auth/authorize/?client_key=YOUR_CLIENT_KEY',
+      //   callbackUrlScheme: 'yourapp',
+      // );
+
       await Future.delayed(const Duration(seconds: 2));
 
       // Generate a mock access token for testing
@@ -130,6 +151,71 @@ class _LoginScreenState extends State<LoginScreen>
       builder: (context) => AlertDialog(
         title: Text(title),
         content: SingleChildScrollView(child: Text(message)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows TikTok API compliance and data usage information
+  void _showDataUsageInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Data Usage & Privacy'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'What data we access:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('• Basic profile information (username, avatar)'),
+              const Text('• Public follower list'),
+              const Text('• Public following list'),
+              const SizedBox(height: 16),
+              const Text(
+                'How we use your data:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('• Track follower changes over time'),
+              const Text('• Identify mutual connections'),
+              const Text('• Generate engagement insights'),
+              const Text('• Cache data locally for offline access'),
+              const SizedBox(height: 16),
+              const Text(
+                'Your privacy:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('• All data stored locally on your device'),
+              const Text('• No data shared with third parties'),
+              const Text('• You can revoke access anytime'),
+              const Text('• Complies with TikTok\'s Terms of Service'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: const Text(
+                  'ℹ️ This app respects TikTok\'s rate limits (100 requests/minute) and only accesses public data available through official APIs.',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

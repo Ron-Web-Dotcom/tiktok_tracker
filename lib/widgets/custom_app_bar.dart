@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// App bar variant types for different screen contexts
+/// App Bar Variants - Different styles for different screens
 enum CustomAppBarVariant {
   /// Standard app bar with title and optional actions
   standard,
@@ -16,50 +16,65 @@ enum CustomAppBarVariant {
   transparent,
 }
 
-/// Custom app bar widget for TikTok Analytics app
-/// Implements clean, minimal design with contextual actions
+/// Custom App Bar Widget - Reusable top bar for all screens
+///
+/// This widget provides a consistent app bar design across the app.
+/// It adapts to different screen needs with multiple variants.
 ///
 /// Features:
-/// - Multiple variants for different screen contexts
-/// - Smooth elevation changes on scroll
-/// - Haptic feedback for interactions
-/// - Search integration
-/// - Badge support for notifications
+/// - Multiple styles (standard, search, detail, transparent)
+/// - Smooth elevation changes when scrolling
+/// - Haptic feedback (phone vibrates) when tapping buttons
+/// - Search integration for search screens
+/// - Notification badge support
+/// - Custom back button handling
+///
+/// Usage Examples:
+/// ```dart
+/// // Standard app bar with title
+/// CustomAppBar.standard(title: 'Dashboard')
+///
+/// // App bar with search field
+/// CustomAppBar.search(onSearch: (query) => print(query))
+///
+/// // Detail screen with back button
+/// CustomAppBar.detail(title: 'Profile Details')
+/// ```
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
-  /// App bar variant type
+  /// Which style of app bar to use
   final CustomAppBarVariant variant;
 
-  /// Title text
+  /// Main title text displayed in the app bar
   final String? title;
 
   /// Optional subtitle for additional context
   final String? subtitle;
 
-  /// Leading widget (overrides default back button)
+  /// Custom widget to show on the left (overrides default back button)
   final Widget? leading;
 
-  /// Action widgets displayed on the right
+  /// Action buttons displayed on the right side
   final List<Widget>? actions;
 
-  /// Search query callback for search variant
+  /// Callback when user types in search field (search variant only)
   final Function(String)? onSearch;
 
-  /// Initial search query for search variant
+  /// Initial text in search field (search variant only)
   final String? initialSearchQuery;
 
-  /// Notification badge count
+  /// Number to show in notification badge (e.g., "3" unread)
   final int? notificationBadgeCount;
 
-  /// Whether to show elevation (for scrolled state)
+  /// Whether to show shadow under app bar (when scrolled)
   final bool elevated;
 
-  /// Custom background color
+  /// Custom background color (uses theme color if not specified)
   final Color? backgroundColor;
 
   /// Whether to show back button
   final bool showBackButton;
 
-  /// Custom back button callback
+  /// Custom action when back button is pressed
   final VoidCallback? onBackPressed;
 
   const CustomAppBar({
@@ -78,7 +93,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onBackPressed,
   });
 
-  /// Standard app bar with title
+  /// Create a standard app bar with title
   const CustomAppBar.standard({
     super.key,
     required this.title,
@@ -94,7 +109,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
        showBackButton = false,
        onBackPressed = null;
 
-  /// Search app bar with search field
+  /// Create a search app bar with search field
   const CustomAppBar.search({
     super.key,
     required this.onSearch,
@@ -110,7 +125,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
        showBackButton = false,
        onBackPressed = null;
 
-  /// Detail app bar with back button
+  /// Create a detail app bar with back button
   const CustomAppBar.detail({
     super.key,
     required this.title,
@@ -126,7 +141,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
        notificationBadgeCount = null,
        showBackButton = true;
 
-  /// Transparent app bar for overlays
+  /// Create a transparent app bar for overlays
   const CustomAppBar.transparent({
     super.key,
     this.title,

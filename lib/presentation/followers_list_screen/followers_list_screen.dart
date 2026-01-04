@@ -14,16 +14,26 @@ import './widgets/filter_chip_widget.dart';
 import './widgets/follower_card_widget.dart';
 import './widgets/skeleton_loader_widget.dart';
 
-/// Followers List Screen - Comprehensive follower management interface
+/// Followers List Screen - Manage and view all your TikTok followers
 ///
-/// Features:
-/// - Real-time search with debouncing
-/// - Advanced filtering (date ranges, mutual followers, verification, engagement)
-/// - Pull-to-refresh synchronization
-/// - Swipe actions (follow-back, block, remove)
-/// - Multi-select mode with batch operations
-/// - Infinite scroll with progressive loading
-/// - Platform-specific interactions (haptics, ripple effects)
+/// This screen shows everyone who follows you on TikTok.
+/// You can search, filter, sort, and take actions on your followers.
+///
+/// Key Features:
+/// - Search followers by username or display name
+/// - Filter by date, mutual followers, verified accounts, engagement level
+/// - Sort by recent, alphabetical, engagement, or mutual connections
+/// - Swipe left on a follower to follow back, block, or remove
+/// - Multi-select mode to remove or block multiple followers at once
+/// - Pull down to refresh from TikTok
+/// - Infinite scroll loads more followers as you scroll down
+///
+/// How it works:
+/// 1. Loads your followers from TikTok when screen opens
+/// 2. Displays them in a scrollable list
+/// 3. As you search/filter, the list updates in real-time
+/// 4. Swipe actions let you manage individual followers
+/// 5. Multi-select mode for batch operations
 class FollowersListScreen extends StatefulWidget {
   const FollowersListScreen({super.key});
 
@@ -32,45 +42,57 @@ class FollowersListScreen extends StatefulWidget {
 }
 
 class _FollowersListScreenState extends State<FollowersListScreen> {
-  // Controllers
+  // Text field controller for search input
   final TextEditingController _searchController = TextEditingController();
+
+  // Scroll controller to detect when user scrolls to bottom
   final ScrollController _scrollController = ScrollController();
+
+  // Service to communicate with TikTok API
   final TikTokService _tiktokService = TikTokService();
 
-  // State variables
-  bool _isLoading = true;
-  bool _isRefreshing = false;
-  bool _isMultiSelectMode = false;
+  // Loading states
+  bool _isLoading = true; // Initial data load
+  bool _isRefreshing = false; // Pull-to-refresh
+  bool _isMultiSelectMode = false; // Batch selection mode
+
+  // Current search query
   String _searchQuery = '';
+
+  // IDs of followers selected in multi-select mode
   List<String> _selectedFollowerIds = [];
 
-  // Filter state
+  // Active filters (date range, mutual only, verified only, etc.)
   Map<String, dynamic> _activeFilters = {};
 
-  // Sort options
-  String _currentSortOption =
-      'recent'; // recent, alphabetical, engagement, mutual
+  // Current sort option: 'recent', 'alphabetical', 'engagement', 'mutual'
+  String _currentSortOption = 'recent';
 
-  // Real data from TikTok API (sorted latest first)
+  // All followers from TikTok (sorted newest first)
   List<Map<String, dynamic>> _allFollowers = [];
+
+  // Filtered/sorted followers currently displayed
   List<Map<String, dynamic>> _filteredFollowers = [];
 
   @override
   void initState() {
     super.initState();
+    // Set up listeners for scroll and search
     _scrollController.addListener(_onScroll);
     _searchController.addListener(_onSearchChanged);
+    // Load followers from TikTok
     _loadRealData();
   }
 
   @override
   void dispose() {
+    // Clean up controllers when screen is closed
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load real data from TikTok API
+  /// Load followers from TikTok API
   Future<void> _loadRealData() async {
     setState(() => _isLoading = true);
 
@@ -101,6 +123,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     }
   }
 
+  /// Detect when user scrolls near bottom of list
+  /// Triggers loading more followers (infinite scroll)
   void _onScroll() {
     // Infinite scroll implementation
     if (_scrollController.position.pixels >=
@@ -109,6 +133,9 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     }
   }
 
+  /// Called whenever search text changes
+  /// Waits 300ms after user stops typing before searching
+  /// (This is called "debouncing" - prevents searching on every keystroke)
   void _onSearchChanged() {
     // Debounced search
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -120,6 +147,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     });
   }
 
+  /// Apply all active filters and search query to the followers list
+  /// This function runs every time search text or filters change
   void _applyFiltersAndSearch() {
     setState(() {
       _filteredFollowers = _allFollowers.where((follower) {
@@ -182,12 +211,19 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     });
   }
 
+  /// Check if two dates are on the same day
+  /// Used for "today" filter
   bool _isSameDay(DateTime date1, DateTime date2) {
     return date1.year == date2.year &&
         date1.month == date2.month &&
         date1.day == date2.day;
   }
 
+  /// Sort the filtered followers based on current sort option
+  /// - recent: Newest followers first
+  /// - alphabetical: A to Z by display name
+  /// - engagement: High engagement first
+  /// - mutual: Mutual followers first
   void _applySorting() {
     switch (_currentSortOption) {
       case 'recent':
@@ -199,6 +235,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         );
         break;
       case 'alphabetical':
+        // Sort A to Z by display name
         _filteredFollowers.sort(
           (a, b) => (a['displayName'] as String).compareTo(
             b['displayName'] as String,
@@ -206,6 +243,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         );
         break;
       case 'engagement':
+        // Sort by engagement level (high > medium > low)
         _filteredFollowers.sort((a, b) {
           final aLevel = a['engagementLevel'] as String;
           final bLevel = b['engagementLevel'] as String;
@@ -214,6 +252,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         });
         break;
       case 'mutual':
+        // Sort mutual followers first, then by date
         _filteredFollowers.sort((a, b) {
           if (a['isMutual'] == b['isMutual']) {
             // If both mutual or both not mutual, sort by date (latest first)
@@ -227,6 +266,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     }
   }
 
+  /// Handle pull-to-refresh gesture
+  /// Reloads followers from TikTok
   Future<void> _refreshFollowers() async {
     setState(() => _isRefreshing = true);
 
@@ -238,6 +279,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     }
   }
 
+  /// Load more followers when user scrolls to bottom
+  /// (Currently simulated - would load next page in production)
   Future<void> _loadMoreFollowers() async {
     if (_isLoading) return;
 
@@ -321,15 +364,77 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _allFollowers.removeWhere((f) => f["id"] == follower["id"]);
-                _applyFiltersAndSearch();
-              });
+
+              // Show loading indicator
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Removed ${follower["displayName"]}')),
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 16),
+                      Text('Removing ${follower["displayName"]}...'),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 30),
+                ),
               );
+
+              try {
+                // Call TikTok API to remove follower
+                final success = await _tiktokService.removeFollower(
+                  follower["id"] as String,
+                );
+
+                if (success) {
+                  setState(() {
+                    _allFollowers.removeWhere((f) => f["id"] == follower["id"]);
+                    _applyFiltersAndSearch();
+                  });
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Removed ${follower["displayName"]} from TikTok',
+                        ),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Failed to remove ${follower["displayName"]}',
+                        ),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Remove'),
           ),
@@ -353,15 +458,77 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _allFollowers.removeWhere((f) => f["id"] == follower["id"]);
-                _applyFiltersAndSearch();
-              });
+
+              // Show loading indicator
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Blocked ${follower["displayName"]}')),
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 16),
+                      Text('Blocking ${follower["displayName"]}...'),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 30),
+                ),
               );
+
+              try {
+                // Call TikTok API to block user
+                final success = await _tiktokService.blockUser(
+                  follower["id"] as String,
+                );
+
+                if (success) {
+                  setState(() {
+                    _allFollowers.removeWhere((f) => f["id"] == follower["id"]);
+                    _applyFiltersAndSearch();
+                  });
+
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Blocked ${follower["displayName"]} on TikTok',
+                        ),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                } else {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).clearSnackBars();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Failed to block ${follower["displayName"]}',
+                        ),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Block'),
           ),
@@ -370,14 +537,18 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
     );
   }
 
-  void _handleBatchAction(String action) {
+  void _handleBatchAction(String action) async {
     HapticFeedback.mediumImpact();
+
+    final selectedCount = _selectedFollowerIds.length;
+    final actionLower = action.toLowerCase();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('$action ${_selectedFollowerIds.length} followers'),
+        title: Text('$action $selectedCount followers'),
         content: Text(
-          'Are you sure you want to $action ${_selectedFollowerIds.length} selected followers?',
+          'Are you sure you want to $actionLower $selectedCount selected followers on TikTok?',
         ),
         actions: [
           TextButton(
@@ -385,19 +556,113 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              setState(() {
-                _allFollowers.removeWhere(
-                  (f) => _selectedFollowerIds.contains(f["id"]),
-                );
-                _selectedFollowerIds.clear();
-                _isMultiSelectMode = false;
-                _applyFiltersAndSearch();
-              });
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('$action completed')));
+
+              // Show loading indicator
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 16),
+                      Text('Processing $selectedCount followers...'),
+                    ],
+                  ),
+                  duration: const Duration(minutes: 2),
+                ),
+              );
+
+              try {
+                Map<String, dynamic> result;
+
+                if (actionLower == 'remove') {
+                  result = await _tiktokService.batchRemoveFollowers(
+                    _selectedFollowerIds,
+                  );
+                } else {
+                  result = await _tiktokService.batchBlockUsers(
+                    _selectedFollowerIds,
+                  );
+                }
+
+                final successCount = result['successCount'] as int;
+                final failureCount = result['failureCount'] as int;
+
+                // Remove successfully processed followers from local state
+                if (successCount > 0) {
+                  setState(() {
+                    _allFollowers.removeWhere(
+                      (f) => _selectedFollowerIds.contains(f["id"]),
+                    );
+                    _selectedFollowerIds.clear();
+                    _isMultiSelectMode = false;
+                    _applyFiltersAndSearch();
+                  });
+                }
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+
+                  if (failureCount == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Successfully ${actionLower}d $successCount followers on TikTok',
+                        ),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Completed: $successCount succeeded, $failureCount failed',
+                        ),
+                        backgroundColor: Colors.orange,
+                        duration: const Duration(seconds: 4),
+                        action: SnackBarAction(
+                          label: 'Details',
+                          textColor: Colors.white,
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Batch Operation Results'),
+                                content: Text(
+                                  'Success: $successCount\nFailed: $failureCount',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('OK'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  }
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                }
+              }
             },
             child: const Text('Confirm'),
           ),
@@ -470,7 +735,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         Navigator.pop(context);
         setState(() {
           _currentSortOption = value;
-          _applySorting();
+          _applyFiltersAndSearch();
         });
       },
     );

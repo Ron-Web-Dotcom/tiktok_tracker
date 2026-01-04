@@ -1,56 +1,99 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// A class that contains all theme configurations for the TikTok Analytics application.
-/// Implements Contemporary Data Minimalism with Analytical Trust Palette.
+/// App Theme Configuration - Defines the look and feel of the entire app
+///
+/// This class contains all colors, text styles, and component themes.
+/// It implements a "Contemporary Data Minimalism" design with clean,
+/// professional colors optimized for data visualization.
+///
+/// Design Philosophy:
+/// - Clean and minimal for easy data reading
+/// - Professional color palette (navy blues, grays)
+/// - High contrast for mobile legibility
+/// - Subtle shadows and elevations
+/// - Consistent spacing and sizing
+///
+/// Color Palette:
+/// - Primary: Deep navy blue (#1B263B) - Trust and professionalism
+/// - Secondary: Blue-gray (#415A77) - Supporting elements
+/// - Success: Forest green - Positive trends
+/// - Warning: Amber - Attention needed
+/// - Error: Deep red - Critical actions
+/// - Background: Light gray (#F8F9FA) - Clean canvas
+/// - Surface: Pure white - Cards and containers
 class AppTheme {
-  AppTheme._();
+  AppTheme._(); // Private constructor - this class is never instantiated
 
-  // Primary color palette - Analytical Trust Palette
+  // ==================== LIGHT THEME COLORS ====================
+
+  // Primary colors - Main brand colors
   static const Color primaryLight = Color(0xFF1B263B); // Deep navy for trust
-  static const Color primaryVariantLight = Color(0xFF0F1621);
+  static const Color primaryVariantLight = Color(0xFF0F1621); // Darker navy
   static const Color secondaryLight = Color(0xFF415A77); // Supporting blue-gray
-  static const Color secondaryVariantLight = Color(0xFF2E4057);
+  static const Color secondaryVariantLight = Color(
+    0xFF2E4057,
+  ); // Darker blue-gray
   static const Color accentLight = Color(
     0xFF778DA9,
   ); // Muted blue for interactions
 
-  // Semantic colors
+  // Semantic colors - Convey meaning
   static const Color successLight = Color(0xFF2D5016); // Forest green for gains
   static const Color warningLight = Color(0xFF8B5A00); // Amber for attention
   static const Color errorLight = Color(
     0xFF8B1538,
   ); // Deep red for critical actions
 
-  // Surface colors
+  // Surface colors - Backgrounds and containers
   static const Color backgroundLight = Color(0xFFF8F9FA); // Clean light gray
   static const Color surfaceLight = Color(0xFFFFFFFF); // Pure white cards
-  static const Color cardLight = Color(0xFFFFFFFF);
-  static const Color dialogLight = Color(0xFFFFFFFF);
+  static const Color cardLight = Color(0xFFFFFFFF); // Card background
+  static const Color dialogLight = Color(0xFFFFFFFF); // Dialog background
 
-  // Text colors - optimized for mobile legibility
-  static const Color textPrimaryLight = Color(0xFF212529); // Near-black
-  static const Color textSecondaryLight = Color(0xFF6C757D); // Medium gray
-  static const Color textHighEmphasisLight = Color(0xFF212529);
-  static const Color textMediumEmphasisLight = Color(0xFF6C757D);
-  static const Color textDisabledLight = Color(0xFFADB5BD);
+  // Text colors - Optimized for mobile legibility
+  static const Color textPrimaryLight = Color(
+    0xFF212529,
+  ); // Near-black for main text
+  static const Color textSecondaryLight = Color(
+    0xFF6C757D,
+  ); // Medium gray for secondary text
+  static const Color textHighEmphasisLight = Color(
+    0xFF212529,
+  ); // Important text
+  static const Color textMediumEmphasisLight = Color(
+    0xFF6C757D,
+  ); // Less important text
+  static const Color textDisabledLight = Color(
+    0xFFADB5BD,
+  ); // Disabled/inactive text
 
-  // On-color variants
-  static const Color onPrimaryLight = Color(0xFFFFFFFF);
-  static const Color onSecondaryLight = Color(0xFFFFFFFF);
-  static const Color onBackgroundLight = Color(0xFF212529);
-  static const Color onSurfaceLight = Color(0xFF212529);
-  static const Color onErrorLight = Color(0xFFFFFFFF);
+  // On-color variants - Text/icons on colored backgrounds
+  static const Color onPrimaryLight = Color(
+    0xFFFFFFFF,
+  ); // White text on primary color
+  static const Color onSecondaryLight = Color(
+    0xFFFFFFFF,
+  ); // White text on secondary color
+  static const Color onBackgroundLight = Color(
+    0xFF212529,
+  ); // Dark text on background
+  static const Color onSurfaceLight = Color(0xFF212529); // Dark text on surface
+  static const Color onErrorLight = Color(
+    0xFFFFFFFF,
+  ); // White text on error color
 
-  // Utility colors
+  // Utility colors - Shadows and dividers
   static const Color shadowLight = Color(
     0x1A000000,
-  ); // 0.1 opacity for subtle elevation
+  ); // 10% opacity for subtle elevation
   static const Color dividerLight = Color(
     0x1A212529,
-  ); // 0.1 opacity for spatial definition
+  ); // 10% opacity for spatial definition
 
-  // Dark theme colors
+  // ==================== DARK THEME COLORS ====================
+  // (Similar structure but inverted for dark mode)
+
   static const Color primaryDark = Color(0xFF778DA9);
   static const Color primaryVariantDark = Color(0xFF415A77);
   static const Color secondaryDark = Color(0xFF415A77);
@@ -81,10 +124,12 @@ class AppTheme {
   static const Color shadowDark = Color(0x1AFFFFFF);
   static const Color dividerDark = Color(0x1AF8F9FA);
 
-  /// Light theme with Contemporary Data Minimalism design
+  /// Light theme configuration
+  /// Used when app is in light mode
   static ThemeData lightTheme = ThemeData(
     brightness: Brightness.light,
-    useMaterial3: true,
+    useMaterial3: true, // Use Material Design 3
+    // Color scheme defines all colors used throughout the app
     colorScheme: ColorScheme(
       brightness: Brightness.light,
       primary: primaryLight,
@@ -112,18 +157,18 @@ class AppTheme {
       onInverseSurface: onSurfaceDark,
       inversePrimary: primaryDark,
     ),
-    scaffoldBackgroundColor: backgroundLight,
-    cardColor: cardLight,
-    dividerColor: dividerLight,
 
-    // AppBar theme - clean headers for analytics
+    scaffoldBackgroundColor: backgroundLight, // Screen background color
+    cardColor: cardLight, // Card background color
+    dividerColor: dividerLight, // Line divider color
+    // AppBar theme - Top bar on each screen
     appBarTheme: AppBarThemeData(
       backgroundColor: surfaceLight,
       foregroundColor: textPrimaryLight,
-      elevation: 0,
-      scrolledUnderElevation: 2,
+      elevation: 0, // No shadow by default
+      scrolledUnderElevation: 2, // Shadow when scrolled
       shadowColor: shadowLight,
-      centerTitle: false,
+      centerTitle: false, // Title aligned left
       titleTextStyle: GoogleFonts.inter(
         fontSize: 20,
         fontWeight: FontWeight.w600,
@@ -132,22 +177,22 @@ class AppTheme {
       ),
     ),
 
-    // Card theme - subtle elevation for data containers
+    // Card theme - Container boxes throughout the app
     cardTheme: CardThemeData(
       color: cardLight,
-      elevation: 2,
+      elevation: 2, // Subtle shadow
       shadowColor: shadowLight,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     ),
 
-    // Bottom navigation - thumb-optimized positioning
+    // Bottom navigation bar theme
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: surfaceLight,
-      selectedItemColor: primaryLight,
-      unselectedItemColor: textMediumEmphasisLight,
+      selectedItemColor: primaryLight, // Active tab color
+      unselectedItemColor: textMediumEmphasisLight, // Inactive tab color
       elevation: 8,
-      type: BottomNavigationBarType.fixed,
+      type: BottomNavigationBarType.fixed, // All tabs always visible
       selectedLabelStyle: GoogleFonts.inter(
         fontSize: 12,
         fontWeight: FontWeight.w500,
@@ -158,7 +203,7 @@ class AppTheme {
       ),
     ),
 
-    // FAB theme - quick refresh action
+    // Floating action button theme (sync button on dashboard)
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: primaryLight,
       foregroundColor: onPrimaryLight,
@@ -166,7 +211,9 @@ class AppTheme {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.0)),
     ),
 
-    // Button themes
+    // Button themes - Different button styles
+
+    // Elevated button (filled button with shadow)
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         foregroundColor: onPrimaryLight,
@@ -174,7 +221,7 @@ class AppTheme {
         elevation: 2,
         shadowColor: shadowLight,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        minimumSize: const Size(48, 48),
+        minimumSize: const Size(48, 48), // Minimum tap target size
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
         textStyle: GoogleFonts.inter(
           fontSize: 14,
@@ -184,6 +231,7 @@ class AppTheme {
       ),
     ),
 
+    // Outlined button (button with border, no fill)
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: primaryLight,
@@ -199,6 +247,7 @@ class AppTheme {
       ),
     ),
 
+    // Text button (button with no background or border)
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: primaryLight,
@@ -213,10 +262,11 @@ class AppTheme {
       ),
     ),
 
-    // Text theme - Inter for readability, JetBrains Mono for data
+    // Text theme - All text styles used in the app
+    // Uses Inter font for readability
     textTheme: _buildTextTheme(isLight: true),
 
-    // Input decoration - focused states for form elements
+    // Input decoration theme - Text fields and search bars
     inputDecorationTheme: InputDecorationThemeData(
       fillColor: surfaceLight,
       filled: true,
@@ -409,10 +459,12 @@ class AppTheme {
     ),
   );
 
-  /// Dark theme with Contemporary Data Minimalism design
+  /// Dark theme configuration
+  /// Used when app is in dark mode
   static ThemeData darkTheme = ThemeData(
     brightness: Brightness.dark,
     useMaterial3: true,
+
     colorScheme: ColorScheme(
       brightness: Brightness.dark,
       primary: primaryDark,
@@ -440,6 +492,7 @@ class AppTheme {
       onInverseSurface: onSurfaceLight,
       inversePrimary: primaryLight,
     ),
+
     scaffoldBackgroundColor: backgroundDark,
     cardColor: cardDark,
     dividerColor: dividerDark,

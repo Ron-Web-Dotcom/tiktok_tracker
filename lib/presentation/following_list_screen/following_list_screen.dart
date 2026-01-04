@@ -13,8 +13,25 @@ import './widgets/following_card_widget.dart';
 import './widgets/not_following_back_section_widget.dart';
 import './widgets/smart_suggestions_widget.dart';
 
-/// Following List Screen - Manages accounts the user follows with emphasis on
-/// identifying non-reciprocal relationships and engagement patterns
+/// Following List Screen - Manage accounts you follow on TikTok
+///
+/// This screen shows everyone you're following on TikTok.
+/// It helps you identify who doesn't follow you back and suggests new accounts.
+///
+/// Key Features:
+/// - Two tabs: "Not Following Back" and "All Following"
+/// - Smart AI-powered suggestions for accounts to follow
+/// - Search by username or display name
+/// - Filter by engagement level, activity status
+/// - Unfollow accounts with undo option
+/// - Bulk unfollow multiple accounts at once
+/// - Pull down to refresh from TikTok
+///
+/// How it works:
+/// 1. Loads your following list from TikTok
+/// 2. Uses AI to generate smart follow suggestions
+/// 3. Identifies accounts that don't follow you back
+/// 4. Lets you unfollow with a simple swipe or bulk selection
 class FollowingListScreen extends StatefulWidget {
   const FollowingListScreen({super.key});
 
@@ -24,45 +41,65 @@ class FollowingListScreen extends StatefulWidget {
 
 class _FollowingListScreenState extends State<FollowingListScreen>
     with TickerProviderStateMixin {
+  // Tab controller for "Not Following Back" and "All Following" tabs
   late TabController _tabController;
+
+  // Text field controller for search
   final TextEditingController _searchController = TextEditingController();
+
+  // Scroll controller to detect scroll position
   final ScrollController _scrollController = ScrollController();
+
+  // Services for TikTok API and AI
   final TikTokService _tiktokService = TikTokService();
   final OpenAIService _openaiService = OpenAIService();
 
+  // Search and UI states
   String _searchQuery = '';
   bool _isSearching = false;
   bool _isRefreshing = false;
-  bool _isBulkSelectionMode = false;
+  bool _isBulkSelectionMode = false; // Multi-select mode
   bool _isLoadingData = true;
+
+  // Selected accounts in bulk mode
   final Set<int> _selectedFollowingIds = {};
+
+  // Active filter: 'All', 'Not Following Back', 'High Engagement', etc.
   String _activeFilter = 'All';
+
+  // Show "scroll to top" button when scrolled down
   bool _showScrollToTop = false;
 
-  // Real data from TikTok API (sorted latest first)
+  // All accounts you're following (sorted newest first)
   List<Map<String, dynamic>> _followingList = [];
+
+  // AI-generated suggestions for accounts to follow
   List<Map<String, dynamic>> _smartSuggestions = [];
 
-  // Undo stack for recent unfollow actions
+  // Stack to store recently unfollowed accounts (for undo)
   final List<Map<String, dynamic>> _undoStack = [];
 
   @override
   void initState() {
     super.initState();
+    // Set up tabs (2 tabs: Not Following Back, All Following)
     _tabController = TabController(length: 2, vsync: this, initialIndex: 1);
+    // Listen for scroll events
     _scrollController.addListener(_handleScroll);
+    // Load data from TikTok
     _loadRealData();
   }
 
   @override
   void dispose() {
+    // Clean up controllers
     _tabController.dispose();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  /// Load real data from TikTok API
+  /// Load following list and AI suggestions from TikTok
   Future<void> _loadRealData() async {
     setState(() => _isLoadingData = true);
 
@@ -102,6 +139,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     }
   }
 
+  /// Detect scroll position to show/hide "scroll to top" button
   void _handleScroll() {
     if (_scrollController.offset > 200 && !_showScrollToTop) {
       setState(() => _showScrollToTop = true);
@@ -110,6 +148,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     }
   }
 
+  /// Scroll back to top of list with smooth animation
   void _scrollToTop() {
     HapticFeedback.lightImpact();
     _scrollController.animateTo(
@@ -119,6 +158,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     );
   }
 
+  /// Get filtered following list based on search and active filter
+  /// This is a computed property that updates automatically
   List<Map<String, dynamic>> get _filteredFollowingList {
     var filtered = _followingList.where((following) {
       final matchesSearch =
@@ -152,6 +193,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     return filtered;
   }
 
+  /// Get list of accounts that don't follow you back
+  /// Sorted by newest first
   List<Map<String, dynamic>> get _notFollowingBackList {
     final list = _followingList
         .where((following) => !(following["followsBack"] as bool))
@@ -166,6 +209,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     return list;
   }
 
+  /// Handle pull-to-refresh gesture
+  /// Reloads following list and AI suggestions
   Future<void> _handleRefresh() async {
     setState(() => _isRefreshing = true);
     HapticFeedback.mediumImpact();
@@ -186,6 +231,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     }
   }
 
+  /// Unfollow a single account
+  /// Adds to undo stack so user can reverse the action
   void _handleUnfollow(Map<String, dynamic> following) {
     HapticFeedback.mediumImpact();
 
@@ -210,6 +257,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     );
   }
 
+  /// Undo an unfollow action
+  /// Restores the account to your following list
   void _handleUndo(Map<String, dynamic> following) {
     HapticFeedback.lightImpact();
 
@@ -228,6 +277,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     );
   }
 
+  /// Show confirmation dialog for bulk unfollow
   void _handleBulkUnfollow() {
     if (_selectedFollowingIds.isEmpty) return;
 
@@ -257,6 +307,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     );
   }
 
+  /// Actually perform the bulk unfollow operation
+  /// Removes all selected accounts from following list
   void _performBulkUnfollow() {
     final unfollowedCount = _selectedFollowingIds.length;
 
@@ -278,6 +330,8 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     );
   }
 
+  /// Show filter bottom sheet
+  /// Lets user filter by engagement, activity, etc.
   void _showFilterBottomSheet() {
     HapticFeedback.lightImpact();
 
@@ -288,13 +342,16 @@ class _FollowingListScreenState extends State<FollowingListScreen>
       builder: (context) => FilterBottomSheetWidget(
         activeFilter: _activeFilter,
         onFilterSelected: (filter) {
-          setState(() => _activeFilter = filter);
           Navigator.pop(context);
+          setState(() {
+            _activeFilter = filter;
+          });
         },
       ),
     );
   }
 
+  /// Toggle bulk selection mode on/off
   void _toggleBulkSelection() {
     HapticFeedback.lightImpact();
     setState(() {
@@ -305,6 +362,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
     });
   }
 
+  /// Toggle selection of a single account
   void _toggleSelection(int id) {
     HapticFeedback.selectionClick();
     setState(() {

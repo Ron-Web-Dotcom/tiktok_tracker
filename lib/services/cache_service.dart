@@ -1,13 +1,21 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Optimized caching service for offline functionality
-/// Handles efficient storage and retrieval of follower lists, notifications, and analytics
+/// Cache Service - Stores data locally on the device for offline access
+/// This is a singleton (only one instance exists throughout the app)
+///
+/// Main responsibilities:
+/// - Save followers and following lists locally
+/// - Store notifications for offline viewing
+/// - Cache analytics data to reduce API calls
+/// - Manage cache expiration times
+/// - Provide quick access to stored data
 class CacheService {
+  // Singleton pattern - ensures only one instance exists
   static final CacheService _instance = CacheService._internal();
-  SharedPreferences? _prefs;
+  SharedPreferences? _prefs; // Local storage instance
 
-  // Cache keys
+  // Keys used to store different types of data
   static const String _followersKey = 'cached_followers';
   static const String _followingKey = 'cached_following';
   static const String _notificationsKey = 'cached_notifications';
@@ -18,23 +26,26 @@ class CacheService {
   static const String _followerIdsKey = 'cached_follower_ids';
   static const String _followingIdsKey = 'cached_following_ids';
 
-  // Cache expiration times (in hours)
-  static const int _followersCacheExpiry = 24;
-  static const int _analyticsCacheExpiry = 12;
-  static const int _notificationsCacheExpiry = 48;
+  // How long before cached data expires (in hours)
+  static const int _followersCacheExpiry = 24; // 24 hours
+  static const int _analyticsCacheExpiry = 12; // 12 hours
+  static const int _notificationsCacheExpiry = 48; // 48 hours
 
+  // Factory constructor returns the same instance every time
   factory CacheService() {
     return _instance;
   }
 
+  // Private constructor - called only once
   CacheService._internal();
 
-  /// Initialize SharedPreferences
+  /// Initialize the local storage system
+  /// Must be called before using any cache methods
   Future<void> initialize() async {
     _prefs ??= await SharedPreferences.getInstance();
   }
 
-  /// Ensure preferences are initialized
+  /// Get the SharedPreferences instance, initializing if needed
   Future<SharedPreferences> _getPrefs() async {
     if (_prefs == null) {
       await initialize();
@@ -44,23 +55,28 @@ class CacheService {
 
   // ==================== FOLLOWERS CACHING ====================
 
-  /// Cache followers list with compression
+  /// Save followers list to local storage
+  /// Also saves just the IDs separately for quick comparisons
+  ///
+  /// Parameters:
+  /// - followers: List of follower data to cache
   Future<void> cacheFollowers(List<Map<String, dynamic>> followers) async {
     final prefs = await _getPrefs();
 
-    // Store full follower data as JSON
+    // Convert followers list to JSON string for storage
     final followersJson = jsonEncode(followers);
     await prefs.setString(_followersKey, followersJson);
 
-    // Store follower IDs separately for quick comparison
+    // Store just the IDs separately (faster to load and compare)
     final followerIds = followers.map((f) => f['id'] as String).toList();
     await prefs.setStringList(_followerIdsKey, followerIds);
 
-    // Update sync timestamp
+    // Record when this data was saved
     await _updateSyncTimestamp('followers');
   }
 
-  /// Retrieve cached followers
+  /// Get cached followers from local storage
+  /// Returns null if no cached data exists
   Future<List<Map<String, dynamic>>?> getCachedFollowers() async {
     final prefs = await _getPrefs();
     final followersJson = prefs.getString(_followersKey);
@@ -68,21 +84,24 @@ class CacheService {
     if (followersJson == null) return null;
 
     try {
+      // Convert JSON string back to list of maps
       final List<dynamic> decoded = jsonDecode(followersJson);
       return decoded.map((item) {
         final map = Map<String, dynamic>.from(item);
-        // Restore DateTime objects
+        // Convert date strings back to DateTime objects
         if (map['followDate'] is String) {
           map['followDate'] = DateTime.parse(map['followDate']);
         }
         return map;
       }).toList();
     } catch (e) {
+      // Return null if data is corrupted
       return null;
     }
   }
 
-  /// Get cached follower IDs only (lightweight)
+  /// Get just the follower IDs (lightweight, faster than full data)
+  /// Useful for quick comparisons without loading all follower details
   Future<List<String>> getCachedFollowerIds() async {
     final prefs = await _getPrefs();
     return prefs.getStringList(_followerIdsKey) ?? [];
@@ -90,23 +109,25 @@ class CacheService {
 
   // ==================== FOLLOWING CACHING ====================
 
-  /// Cache following list with compression
+  /// Save following list to local storage
+  /// Also saves just the IDs separately for quick comparisons
   Future<void> cacheFollowing(List<Map<String, dynamic>> following) async {
     final prefs = await _getPrefs();
 
-    // Store full following data as JSON
+    // Convert following list to JSON string
     final followingJson = jsonEncode(following);
     await prefs.setString(_followingKey, followingJson);
 
-    // Store following IDs separately for quick comparison
+    // Store just the IDs separately
     final followingIds = following.map((f) => f['id'] as String).toList();
     await prefs.setStringList(_followingIdsKey, followingIds);
 
-    // Update sync timestamp
+    // Record when this data was saved
     await _updateSyncTimestamp('following');
   }
 
-  /// Retrieve cached following
+  /// Get cached following list from local storage
+  /// Returns null if no cached data exists
   Future<List<Map<String, dynamic>>?> getCachedFollowing() async {
     final prefs = await _getPrefs();
     final followingJson = prefs.getString(_followingKey);
@@ -117,7 +138,7 @@ class CacheService {
       final List<dynamic> decoded = jsonDecode(followingJson);
       return decoded.map((item) {
         final map = Map<String, dynamic>.from(item);
-        // Restore DateTime objects
+        // Restore DateTime objects from strings
         if (map['followDate'] is String) {
           map['followDate'] = DateTime.parse(map['followDate']);
         }
@@ -131,7 +152,7 @@ class CacheService {
     }
   }
 
-  /// Get cached following IDs only (lightweight)
+  /// Get just the following IDs (lightweight, faster than full data)
   Future<List<String>> getCachedFollowingIds() async {
     final prefs = await _getPrefs();
     return prefs.getStringList(_followingIdsKey) ?? [];
@@ -139,24 +160,26 @@ class CacheService {
 
   // ==================== NOTIFICATIONS CACHING ====================
 
-  /// Cache notifications with optimized storage
+  /// Save notifications to local storage
+  /// Only keeps the most recent 200 notifications to save space
   Future<void> cacheNotifications(
     List<Map<String, dynamic>> notifications,
   ) async {
     final prefs = await _getPrefs();
 
-    // Keep only last 200 notifications
+    // Limit to 200 most recent notifications to save storage space
     final notificationsToStore = notifications.take(200).toList();
 
-    // Store as JSON for better structure preservation
+    // Convert to JSON string
     final notificationsJson = jsonEncode(notificationsToStore);
     await prefs.setString(_notificationsKey, notificationsJson);
 
-    // Update sync timestamp
+    // Record when this data was saved
     await _updateSyncTimestamp('notifications');
   }
 
-  /// Retrieve cached notifications
+  /// Get cached notifications from local storage
+  /// Returns empty list if no cached data exists
   Future<List<Map<String, dynamic>>> getCachedNotifications() async {
     final prefs = await _getPrefs();
     final notificationsJson = prefs.getString(_notificationsKey);
@@ -178,7 +201,8 @@ class CacheService {
     }
   }
 
-  /// Update notification read status
+  /// Mark a notification as read or unread
+  /// Updates the cached notification without fetching from server
   Future<void> updateNotificationReadStatus(
     int notificationId,
     bool isRead,
@@ -192,7 +216,7 @@ class CacheService {
     }
   }
 
-  /// Delete notification from cache
+  /// Delete a notification from cache
   Future<void> deleteNotificationFromCache(int notificationId) async {
     final notifications = await getCachedNotifications();
     notifications.removeWhere((n) => n['id'] == notificationId);
@@ -201,19 +225,20 @@ class CacheService {
 
   // ==================== ANALYTICS CACHING ====================
 
-  /// Cache analytics data
+  /// Save analytics data to local storage
   Future<void> cacheAnalytics(Map<String, dynamic> analyticsData) async {
     final prefs = await _getPrefs();
 
-    // Store analytics as JSON
+    // Convert analytics to JSON string
     final analyticsJson = jsonEncode(analyticsData);
     await prefs.setString(_analyticsKey, analyticsJson);
 
-    // Update sync timestamp
+    // Record when this data was saved
     await _updateSyncTimestamp('analytics');
   }
 
-  /// Retrieve cached analytics
+  /// Get cached analytics from local storage
+  /// Returns null if no cached data exists
   Future<Map<String, dynamic>?> getCachedAnalytics() async {
     final prefs = await _getPrefs();
     final analyticsJson = prefs.getString(_analyticsKey);
@@ -229,19 +254,20 @@ class CacheService {
 
   // ==================== DASHBOARD METRICS CACHING ====================
 
-  /// Cache dashboard metrics
+  /// Save dashboard metrics to local storage
   Future<void> cacheDashboardMetrics(Map<String, dynamic> metrics) async {
     final prefs = await _getPrefs();
 
-    // Store metrics as JSON
+    // Convert metrics to JSON string
     final metricsJson = jsonEncode(metrics);
     await prefs.setString(_dashboardMetricsKey, metricsJson);
 
-    // Update sync timestamp
+    // Record when this data was saved
     await _updateSyncTimestamp('dashboard');
   }
 
-  /// Retrieve cached dashboard metrics
+  /// Get cached dashboard metrics from local storage
+  /// Returns null if no cached data exists
   Future<Map<String, dynamic>?> getCachedDashboardMetrics() async {
     final prefs = await _getPrefs();
     final metricsJson = prefs.getString(_dashboardMetricsKey);

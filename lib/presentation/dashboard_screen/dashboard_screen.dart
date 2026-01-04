@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
+import '../../routes/app_routes.dart';
 import '../../services/cache_service.dart';
 import '../../services/openai_service.dart';
 import '../../services/tiktok_service.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_bottom_bar.dart';
 import '../../widgets/custom_icon_widget.dart';
@@ -14,14 +17,24 @@ import './widgets/empty_state_widget.dart';
 import './widgets/key_metrics_card_widget.dart';
 import './widgets/quick_stats_widget.dart';
 
-/// Dashboard Screen - Primary hub for TikTok follower analytics
+/// Dashboard Screen - The main hub of the TikTok Tracker app
 ///
-/// Features:
-/// - Pull-to-refresh with haptic feedback
-/// - Key metrics horizontal scroll
-/// - Activity timeline with swipe gestures
-/// - Floating sync button
-/// - Bottom navigation integration
+/// This is the first screen users see after logging in.
+/// It shows an overview of your TikTok account metrics and recent activity.
+///
+/// Key Features:
+/// - Pull down to refresh your data from TikTok
+/// - View key metrics (followers, following, unfollows, mutual connections)
+/// - See recent activity timeline
+/// - Floating sync button for manual data refresh
+/// - Bottom navigation to access other screens
+///
+/// How it works:
+/// 1. Checks if you have existing data cached locally
+/// 2. Displays cached data immediately for fast loading
+/// 3. When you sync, fetches fresh data from TikTok
+/// 4. Uses AI to analyze your follower patterns
+/// 5. Updates the display with new insights
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -30,26 +43,41 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // Loading state - shows spinner when fetching data
   bool _isLoading = false;
+
+  // Whether user has synced data at least once
   bool _hasData = false;
+
+  // When data was last updated
   DateTime _lastUpdated = DateTime.now();
+
+  // List of metric cards to display
   List<Map<String, dynamic>> _metrics = [];
+
+  // List of recent activities
   List<Map<String, dynamic>> _activities = [];
+
+  // Number of unread notifications (shown as badge)
   int _unreadNotificationCount = 0;
+
+  // Services for fetching and storing data
   final TikTokService _tiktokService = TikTokService();
   final CacheService _cacheService = CacheService();
 
-  // Initialize with zero data
+  // Key metrics displayed at the top
   List<Map<String, dynamic>> _keyMetrics = [];
 
   @override
   void initState() {
     super.initState();
+    // When screen loads, check for existing data and notification count
     _checkForExistingData();
     _loadUnreadNotificationCount();
   }
 
-  /// Load unread notification count from TikTok service
+  /// Load the count of unread notifications
+  /// This number is shown as a badge on the notifications icon
   Future<void> _loadUnreadNotificationCount() async {
     try {
       final tiktokService = TikTokService();
@@ -74,7 +102,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Check if user has already synced data from TikTok
+  /// Check if user has previously synced data
+  /// If yes, load it from cache for instant display
   Future<void> _checkForExistingData() async {
     final cachedMetrics = await _cacheService.getCachedDashboardMetrics();
 
@@ -83,7 +112,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Load previously synced data from local storage
+  /// Load data that was previously saved to device storage
+  /// This makes the app feel fast even without internet
   Future<void> _loadStoredData() async {
     final cachedMetrics = await _cacheService.getCachedDashboardMetrics();
     final lastSync = await _cacheService.getLastSyncTime('dashboard');
@@ -105,7 +135,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Generate metrics from stored data
+  /// Generate metric cards from stored preferences
+  /// (Legacy method for backward compatibility)
   List<Map<String, dynamic>> _generateMetricsFromStorage(
     SharedPreferences prefs,
   ) {
@@ -141,7 +172,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
   }
 
-  /// Generate activities from stored data
+  /// Generate activity timeline from stored preferences
+  /// (Legacy method for backward compatibility)
   List<Map<String, dynamic>> _generateActivitiesFromStorage(
     SharedPreferences prefs,
   ) {
@@ -149,35 +181,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return [];
   }
 
+  /// Handle pull-to-refresh gesture
+  /// User pulls down on the screen to refresh data
   Future<void> _handleRefresh() async {
-    HapticFeedback.mediumImpact();
+    HapticFeedback.mediumImpact(); // Vibrate phone for feedback
 
     // Call the real sync method to update all data
     await _handleSyncNow();
   }
 
-  /// Sync data from TikTok and analyze with AI
+  /// Main sync function - fetches fresh data from TikTok and analyzes it
+  ///
+  /// This is the core function that:
+  /// 1. Gets your latest followers/following from TikTok
+  /// 2. Sends the data to AI for analysis
+  /// 3. Generates dashboard metrics and insights
+  /// 4. Saves everything locally
+  /// 5. Updates the screen
   Future<void> _handleSyncNow() async {
-    HapticFeedback.mediumImpact();
-    setState(() => _isLoading = true);
+    HapticFeedback.mediumImpact(); // Vibrate phone
+    setState(() => _isLoading = true); // Show loading spinner
 
     try {
-      // Step 1: Fetch real TikTok data
+      // Step 1: Fetch real TikTok data (followers, following, profile)
       final tiktokData = await _fetchRealTikTokData();
 
-      // Step 2: Analyze with OpenAI
+      // Step 2: Analyze with OpenAI to find patterns and insights
       final aiAnalysis = await _analyzeWithAI(tiktokData);
 
-      // Step 3: Generate realistic dashboard data from AI insights
+      // Step 3: Generate dashboard data combining TikTok data + AI insights
       final dashboardData = _generateDashboardData(tiktokData, aiAnalysis);
 
-      // Step 4: Store data locally
+      // Step 4: Store data locally so it's available offline
       await _storeData(dashboardData);
 
       // Step 5: Reload notification count after sync
       await _loadUnreadNotificationCount();
 
-      // Step 6: Update UI
+      // Step 6: Update the screen with new data
       setState(() {
         _hasData = true;
         _keyMetrics = dashboardData['metrics'] as List<Map<String, dynamic>>;
@@ -186,8 +227,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _isLoading = false;
       });
 
-      HapticFeedback.heavyImpact();
+      HapticFeedback.heavyImpact(); // Strong vibration for success
 
+      // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -199,6 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
 
+      // Show error message if something went wrong
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -211,7 +254,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Fetch real data from TikTok API
+  /// Fetch fresh data from TikTok API
+  /// Gets followers, following, mutual connections, and your profile
   Future<Map<String, dynamic>> _fetchRealTikTokData() async {
     // Fetch real follower relationships from TikTok
     final relationships = await _tiktokService.fetchFollowerRelationships();
@@ -231,7 +275,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     };
   }
 
-  /// Analyze TikTok data with OpenAI
+  /// Send your TikTok data to AI for analysis
+  /// AI identifies patterns like who unfollowed you, engagement trends, etc.
   Future<FollowerAnalysisResult> _analyzeWithAI(
     Map<String, dynamic> tiktokData,
   ) async {
@@ -396,22 +441,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: CustomAppBar.standard(
+      backgroundColor: AppTheme.backgroundLight,
+      appBar: CustomAppBar(
         title: 'Dashboard',
-        subtitle: 'Last updated ${_formatTimestamp(_lastUpdated)}',
-        notificationBadgeCount: _unreadNotificationCount,
         actions: [
-          IconButton(
-            icon: CustomIconWidget(
-              iconName: 'refresh',
-              color: theme.colorScheme.onSurface,
-              size: 24,
-            ),
-            onPressed: _handleSyncNow,
-            tooltip: 'Sync Now',
+          // Notifications icon with badge
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.notifications);
+                },
+              ),
+              if (_unreadNotificationCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.errorLight,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      _unreadNotificationCount > 9
+                          ? '9+'
+                          : _unreadNotificationCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'privacy') {
+                Navigator.pushNamed(context, AppRoutes.privacyCompliance);
+              } else if (value == 'features') {
+                Navigator.pushNamed(context, AppRoutes.alternativeFeatures);
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'privacy',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.privacy_tip,
+                      size: 20,
+                      color: AppTheme.primaryLight,
+                    ),
+                    SizedBox(width: 2.w),
+                    Text('Privacy & Compliance'),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'features',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      size: 20,
+                      color: AppTheme.primaryLight,
+                    ),
+                    SizedBox(width: 2.w),
+                    Text('Alternative Features'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

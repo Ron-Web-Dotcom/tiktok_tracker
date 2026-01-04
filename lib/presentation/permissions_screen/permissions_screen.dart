@@ -11,6 +11,14 @@ import './widgets/permission_card_widget.dart';
 /// Permissions Screen for TikTok Tracker
 /// Requests essential device and TikTok account access permissions
 /// with clear value propositions for each requirement
+///
+/// ⚠️ TikTok API Compliance Notice:
+/// This app demonstrates follower tracking concepts using mock data.
+/// Production deployment requires:
+/// - Approved TikTok Developer account
+/// - Proper API scopes (user.info.basic, follower.list)
+/// - Compliance with TikTok's Terms of Service
+/// - Rate limiting (max 100 requests/minute)
 class PermissionsScreen extends StatefulWidget {
   const PermissionsScreen({super.key});
 
@@ -89,6 +97,10 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
     switch (permissionKey) {
       case 'tiktok_data':
+        // Show compliance notice before authentication
+        final shouldContinue = await _showTikTokAuthDialog();
+        if (!shouldContinue) return;
+
         // Mark TikTok data permission as granted (already authenticated via login)
         final prefs = await SharedPreferences.getInstance();
         final isAuthenticated = prefs.getBool('tiktok_authenticated') ?? false;
@@ -97,13 +109,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
           // User already logged in, just grant permission
           granted = true;
         } else {
-          // Need to authenticate first
-          granted = await _showTikTokAuthDialog();
-          if (granted) {
-            // Navigate to login screen for TikTok authentication
-            Navigator.pushReplacementNamed(context, '/login-screen');
-            return;
-          }
+          // Navigate to login screen for TikTok authentication
+          Navigator.pushReplacementNamed(context, '/login-screen');
+          return;
         }
         break;
       case 'notifications':
@@ -143,9 +151,44 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     return await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('TikTok Authorization'),
-            content: const Text(
-              'You will be redirected to TikTok login to authorize access to your follower data. Continue?',
+            title: const Text('TikTok Data Access'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'This app will request access to:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('• Your basic profile information'),
+                  const Text('• Your public follower list'),
+                  const Text('• Your public following list'),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Data Usage & Privacy:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('• Data is cached locally on your device'),
+                  const Text('• No data is shared with third parties'),
+                  const Text('• You can revoke access anytime'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange.shade200),
+                    ),
+                    child: const Text(
+                      '⚠️ Note: This app uses TikTok\'s official API with rate limits (100 requests/minute). Some features may be limited based on TikTok\'s data access policies.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(

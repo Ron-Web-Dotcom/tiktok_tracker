@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// Navigation item configuration for bottom bar
+/// Internal class that defines each tab in the bottom navigation
 class _NavigationItem {
-  final String label;
-  final IconData icon;
-  final IconData activeIcon;
-  final String route;
+  final String label; // Text shown under icon
+  final IconData icon; // Icon when tab is not selected
+  final IconData activeIcon; // Icon when tab is selected
+  final String route; // Screen route to navigate to
 
   const _NavigationItem({
     required this.label,
@@ -16,23 +17,44 @@ class _NavigationItem {
   });
 }
 
-/// Custom bottom navigation bar widget for TikTok Analytics app
-/// Implements thumb-optimized bottom-heavy interaction design with haptic feedback
+/// Custom Bottom Navigation Bar - Main navigation for the app
+///
+/// This widget provides the bottom tab bar that appears on all main screens.
+/// It lets users quickly switch between the 5 main sections of the app.
 ///
 /// Features:
-/// - Fixed 5-tab navigation for primary workflows
-/// - Haptic feedback on tab selection
-/// - Smooth 200ms transitions
-/// - Badge support for notifications
+/// - 5 fixed tabs: Dashboard, Followers, Following, Analytics, Profile
+/// - Haptic feedback (phone vibrates) when switching tabs
+/// - Smooth 200ms transition animations
+/// - Badge support for notifications (shown on Profile tab)
 /// - Adaptive elevation and shadows
+/// - Thumb-optimized positioning (easy to reach with thumb)
+///
+/// The 5 tabs:
+/// 1. Dashboard - Overview of your TikTok metrics
+/// 2. Followers - Manage your followers
+/// 3. Following - Manage accounts you follow
+/// 4. Analytics - Deep insights and charts
+/// 5. Profile - Your profile and notifications
+///
+/// Usage:
+/// ```dart
+/// CustomBottomBar(
+///   currentRoute: '/dashboard-screen',
+///   notificationBadgeCount: 3, // Shows "3" badge on Profile tab
+/// )
+/// ```
 class CustomBottomBar extends StatelessWidget {
-  /// Current active route path
+  /// Current active route path (e.g., '/dashboard-screen')
+  /// Used to highlight the active tab
   final String currentRoute;
 
-  /// Optional badge count for notifications tab
+  /// Number of unread notifications to show as badge on Profile tab
+  /// If null or 0, no badge is shown
   final int? notificationBadgeCount;
 
-  /// Callback when navigation item is tapped
+  /// Callback when user taps a navigation item
+  /// Receives the route path of the tapped tab
   final Function(String route)? onNavigate;
 
   const CustomBottomBar({
@@ -42,7 +64,7 @@ class CustomBottomBar extends StatelessWidget {
     this.onNavigate,
   });
 
-  // Navigation items mapped to app routes
+  // All 5 navigation tabs with their icons and routes
   static const List<_NavigationItem> _navigationItems = [
     _NavigationItem(
       label: 'Dashboard',
@@ -76,6 +98,8 @@ class CustomBottomBar extends StatelessWidget {
     ),
   ];
 
+  /// Get the index of the currently active tab
+  /// Returns 0 (Dashboard) if current route doesn't match any tab
   int get _currentIndex {
     final index = _navigationItems.indexWhere(
       (item) => item.route == currentRoute,
@@ -83,14 +107,19 @@ class CustomBottomBar extends StatelessWidget {
     return index >= 0 ? index : 0;
   }
 
+  /// Handle navigation when user taps a tab
+  /// - Does nothing if tapping the already active tab
+  /// - Vibrates phone for feedback
+  /// - Navigates to the selected screen
   void _handleNavigation(BuildContext context, int index) {
-    if (index == _currentIndex) return;
+    if (index == _currentIndex) return; // Already on this tab
 
-    // Haptic feedback for tab switch
+    // Vibrate phone for feedback
     HapticFeedback.lightImpact();
 
     final route = _navigationItems[index].route;
 
+    // Use custom callback if provided, otherwise use default navigation
     if (onNavigate != null) {
       onNavigate!(route);
     } else {
@@ -104,6 +133,7 @@ class CustomBottomBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Container(
+      // Shadow above the bottom bar
       decoration: BoxDecoration(
         color: colorScheme.surface,
         boxShadow: [
@@ -116,9 +146,9 @@ class CustomBottomBar extends StatelessWidget {
         ],
       ),
       child: SafeArea(
-        top: false,
+        top: false, // Don't add padding at top
         child: Container(
-          height: 64,
+          height: 64, // Fixed height for consistency
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -133,6 +163,8 @@ class CustomBottomBar extends StatelessWidget {
     );
   }
 
+  /// Build a single navigation tab item
+  /// Shows icon, label, and optional badge
   Widget _buildNavigationItem(
     BuildContext context,
     int index,
@@ -142,7 +174,7 @@ class CustomBottomBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final isSelected = index == _currentIndex;
 
-    // Show badge on Profile tab (index 4) for notifications
+    // Show badge on Profile tab (index 4) if there are notifications
     final showBadge =
         index == 4 &&
         notificationBadgeCount != null &&

@@ -1,20 +1,32 @@
 import 'package:dio/dio.dart';
 
-/// OpenAI Service for follower pattern analysis
-/// Singleton service that handles OpenAI API integration
+/// OpenAI Service - Uses AI to analyze your TikTok follower patterns
+/// This is a singleton (only one instance exists throughout the app)
+///
+/// Main responsibilities:
+/// - Generate smart suggestions for accounts to follow
+/// - Analyze follower patterns and trends
+/// - Provide AI-powered insights and recommendations
+/// - Generate analytics for different time periods
 class OpenAIService {
+  // Singleton pattern - ensures only one instance exists
   static final OpenAIService _instance = OpenAIService._internal();
-  late final Dio _dio;
+  late final Dio _dio; // HTTP client for making API requests to OpenAI
+
+  // API key from environment variables (set during build)
   static const String apiKey = String.fromEnvironment('OPENAI_API_KEY');
 
+  // Factory constructor returns the same instance every time
   factory OpenAIService() {
     return _instance;
   }
 
+  // Private constructor - called only once
   OpenAIService._internal() {
     _initializeService();
   }
 
+  /// Initialize the HTTP client with OpenAI API settings
   void _initializeService() {
     if (apiKey.isEmpty) {
       throw Exception('OPENAI_API_KEY must be provided via --dart-define');
@@ -25,7 +37,7 @@ class OpenAIService {
         baseUrl: 'https://api.openai.com/v1',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
+          'Authorization': 'Bearer $apiKey', // Authentication header
         },
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
@@ -33,10 +45,18 @@ class OpenAIService {
     );
   }
 
+  // Expose the HTTP client for advanced usage
   Dio get dio => _dio;
 
-  /// Generate analytics insights for different time periods
-  /// Convenience method that delegates to OpenAIClient
+  /// Generate analytics insights for a specific time period
+  /// This is a convenience method that uses OpenAIClient internally
+  ///
+  /// Parameters:
+  /// - followers: Your current followers list
+  /// - following: Accounts you're following
+  /// - period: Time period ('week', 'month', or 'year')
+  ///
+  /// Returns a map with growth rates, trends, insights, and recommendations
   Future<Map<String, dynamic>> generateAnalyticsInsights({
     required List<Map<String, dynamic>> followers,
     required List<Map<String, dynamic>> following,
@@ -51,23 +71,32 @@ class OpenAIService {
   }
 }
 
-/// OpenAI Client for follower pattern analysis
+/// OpenAI Client - Handles the actual AI analysis logic
+/// Separated from OpenAIService for better code organization
 class OpenAIClient {
-  final Dio dio;
+  final Dio dio; // HTTP client passed from OpenAIService
 
   OpenAIClient(this.dio);
 
-  /// Generate smart suggestions based on real TikTok follower data
-  /// Returns AI-powered recommendations for accounts to follow
+  /// Generate smart suggestions for accounts to follow
+  /// Uses AI to analyze your network and recommend relevant accounts
+  ///
+  /// Parameters:
+  /// - followers: Your current followers
+  /// - following: Accounts you're following
+  ///
+  /// Returns a list of suggested accounts with reasons why you should follow them
   Future<List<Map<String, dynamic>>> generateSmartSuggestions({
     required List<Map<String, dynamic>> followers,
     required List<Map<String, dynamic>> following,
   }) async {
     try {
+      // Build a detailed prompt for the AI
       final suggestionsPrompt = _buildSuggestionsPrompt(followers, following);
 
+      // Request data for OpenAI API
       final requestData = {
-        'model': 'gpt-4o-mini',
+        'model': 'gpt-4o-mini', // AI model to use
         'messages': [
           {
             'role': 'system',
@@ -76,15 +105,18 @@ class OpenAIClient {
           },
           {'role': 'user', 'content': suggestionsPrompt},
         ],
-        'max_tokens': 1000,
-        'temperature': 0.7,
+        'max_tokens': 1000, // Maximum length of AI response
+        'temperature': 0.7, // Creativity level (0.0 = focused, 1.0 = creative)
       };
 
+      // Send request to OpenAI
       final response = await dio.post('/chat/completions', data: requestData);
       final content = response.data['choices'][0]['message']['content'];
 
+      // Parse the AI's response into a usable format
       return _parseSuggestions(content);
     } on DioException catch (e) {
+      // Handle network errors
       throw OpenAIException(
         statusCode: e.response?.statusCode ?? 500,
         message:
@@ -95,11 +127,13 @@ class OpenAIClient {
     }
   }
 
+  /// Build a detailed prompt for the AI to analyze
+  /// Includes information about your current network and interests
   String _buildSuggestionsPrompt(
     List<Map<String, dynamic>> followers,
     List<Map<String, dynamic>> following,
   ) {
-    // Analyze current network
+    // Analyze what types of content you're interested in
     final categories = <String, int>{};
     final highEngagement = <String>[];
 
@@ -107,14 +141,17 @@ class OpenAIClient {
       final category = follow['contentCategory'] ?? 'Lifestyle';
       categories[category] = (categories[category] ?? 0) + 1;
 
+      // Track accounts you engage with frequently
       if ((follow['engagementScore'] ?? 0) > 70) {
         highEngagement.add(follow['username'] ?? '');
       }
     }
 
+    // Sort categories by popularity
     final topCategories = categories.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    // Create a detailed prompt for the AI
     return '''
 Analyze this TikTok user's network and generate smart follow suggestions:
 
@@ -147,9 +184,11 @@ Return ONLY this JSON structure:
 ''';
   }
 
+  /// Parse the AI's response text into a structured list
+  /// Handles different response formats (plain JSON or markdown code blocks)
   List<Map<String, dynamic>> _parseSuggestions(String content) {
     try {
-      // Extract JSON from markdown code blocks if present
+      // Remove markdown code block formatting if present
       String jsonContent = content.trim();
       if (jsonContent.contains('```json')) {
         final startIndex = jsonContent.indexOf('```json') + 7;
@@ -161,7 +200,7 @@ Return ONLY this JSON structure:
         jsonContent = jsonContent.substring(startIndex, endIndex).trim();
       }
 
-      // Simple regex-based extraction for suggestion objects
+      // Extract suggestion objects using regex pattern matching
       final suggestions = <Map<String, dynamic>>[];
       final regex = RegExp(
         r'\{[^}]*"username"\s*:\s*"([^"]+)"[^}]*"displayName"\s*:\s*"([^"]+)"[^}]*"reason"\s*:\s*"([^"]+)"[^}]*"category"\s*:\s*"([^"]+)"[^}]*"potentialValue"\s*:\s*"([^"]+)"[^}]*\}',
@@ -179,12 +218,15 @@ Return ONLY this JSON structure:
         });
       }
 
+      // Return suggestions or fallback if parsing failed
       return suggestions.isNotEmpty ? suggestions : _getFallbackSuggestions();
     } catch (e) {
+      // If anything goes wrong, return fallback suggestions
       return _getFallbackSuggestions();
     }
   }
 
+  /// Provide fallback suggestions if AI analysis fails
   List<Map<String, dynamic>> _getFallbackSuggestions() {
     return [
       {
@@ -198,13 +240,21 @@ Return ONLY this JSON structure:
   }
 
   /// Generate analytics insights for different time periods
-  /// Returns AI-powered analytics data for followers and following
+  /// Uses AI to analyze growth trends and provide recommendations
+  ///
+  /// Parameters:
+  /// - followers: Your current followers
+  /// - following: Accounts you're following
+  /// - period: Time period to analyze ('week', 'month', or 'year')
+  ///
+  /// Returns insights including growth rate, trends, and recommendations
   Future<Map<String, dynamic>> generateAnalyticsInsights({
     required List<Map<String, dynamic>> followers,
     required List<Map<String, dynamic>> following,
     required String period,
   }) async {
     try {
+      // Build a detailed prompt for analytics
       final insightsPrompt = _buildAnalyticsPrompt(
         followers,
         following,
@@ -222,12 +272,13 @@ Return ONLY this JSON structure:
           {'role': 'user', 'content': insightsPrompt},
         ],
         'max_tokens': 800,
-        'temperature': 0.6,
+        'temperature': 0.6, // Slightly more focused for analytics
       };
 
       final response = await dio.post('/chat/completions', data: requestData);
       final content = response.data['choices'][0]['message']['content'];
 
+      // Parse and return the analytics insights
       return _parseAnalyticsInsights(content, period);
     } on DioException catch (e) {
       throw OpenAIException(
@@ -240,11 +291,13 @@ Return ONLY this JSON structure:
     }
   }
 
+  /// Build a detailed prompt for analytics insights
   String _buildAnalyticsPrompt(
     List<Map<String, dynamic>> followers,
     List<Map<String, dynamic>> following,
     String period,
   ) {
+    // Calculate key metrics
     final mutualCount = followers.where((f) => f['isMutual'] == true).length;
     final notFollowingBack = following
         .where((f) => f['followsBack'] == false)
@@ -294,9 +347,10 @@ Return ONLY this JSON structure:
 ''';
   }
 
+  /// Parse the AI's response into structured analytics data
   Map<String, dynamic> _parseAnalyticsInsights(String content, String period) {
     try {
-      // Extract JSON from markdown code blocks if present
+      // Remove markdown code block formatting if present
       String jsonContent = content.trim();
       if (jsonContent.contains('```json')) {
         final startIndex = jsonContent.indexOf('```json') + 7;
@@ -308,7 +362,7 @@ Return ONLY this JSON structure:
         jsonContent = jsonContent.substring(startIndex, endIndex).trim();
       }
 
-      // Simple regex-based extraction
+      // Extract key values using regex
       final growthRateMatch = RegExp(
         r'"growthRate"\s*:\s*([\d.]+)',
       ).firstMatch(jsonContent);
@@ -357,6 +411,7 @@ Return ONLY this JSON structure:
     }
   }
 
+  /// Provide fallback analytics data if AI analysis fails
   Map<String, dynamic> _getFallbackAnalytics(String period) {
     return {
       'growthRate': 0.0,
@@ -406,6 +461,7 @@ Return ONLY this JSON structure:
     }
   }
 
+  /// Build a detailed prompt for follower pattern analysis
   String _buildAnalysisPrompt(
     List<Map<String, dynamic>> followers,
     List<Map<String, dynamic>> following,
@@ -457,9 +513,10 @@ Return ONLY valid JSON with this structure:
 ''';
   }
 
+  /// Parse the AI's analysis response into structured results
   FollowerAnalysisResult _parseAnalysisResult(String content) {
     try {
-      // Extract JSON from markdown code blocks if present
+      // Remove markdown code block formatting if present
       String jsonContent = content.trim();
       if (jsonContent.contains('```json')) {
         final startIndex = jsonContent.indexOf('```json') + 7;
@@ -515,6 +572,7 @@ Return ONLY valid JSON with this structure:
     }
   }
 
+  /// Extract unfollowed users from the analysis response
   List<Map<String, dynamic>> _extractUnfollowedUsers(String content) {
     final users = <Map<String, dynamic>>[];
     final regex = RegExp(
@@ -533,6 +591,7 @@ Return ONLY valid JSON with this structure:
     return users;
   }
 
+  /// Extract patterns from the analysis response
   List<Map<String, dynamic>> _extractPatterns(String content) {
     final patterns = <Map<String, dynamic>>[];
     final regex = RegExp(
@@ -551,6 +610,7 @@ Return ONLY valid JSON with this structure:
     return patterns;
   }
 
+  /// Extract recommendations from the analysis response
   List<Map<String, dynamic>> _extractRecommendations(String content) {
     final recommendations = <Map<String, dynamic>>[];
     final regex = RegExp(

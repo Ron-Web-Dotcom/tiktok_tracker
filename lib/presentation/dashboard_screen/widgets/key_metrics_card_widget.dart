@@ -2,13 +2,41 @@ import 'package:flutter/material.dart';
 
 import '../../../core/app_export.dart';
 
-/// Key metrics card widget for dashboard
-/// Displays individual metric with trend indicator
+/// Key Metrics Card Widget - Displays a single metric on the dashboard
+///
+/// This widget shows one key metric like "Total Followers" or "Following".
+/// Each card includes:
+/// - An icon representing the metric
+/// - The metric value (e.g., "1,234")
+/// - A trend indicator (up/down arrow with percentage)
+/// - Color coding (green for positive, red for negative)
+///
+/// Used in the dashboard screen's horizontal scrolling metrics section.
+///
+/// Example:
+/// ```dart
+/// KeyMetricsCardWidget(
+///   title: 'Total Followers',
+///   value: '1,234',
+///   trend: '+5.2%',
+///   isPositive: true,
+///   iconName: 'people',
+/// )
+/// ```
 class KeyMetricsCardWidget extends StatelessWidget {
+  /// Title of the metric (e.g., "Total Followers")
   final String title;
+
+  /// Current value of the metric (e.g., "1,234")
   final String value;
+
+  /// Trend text (e.g., "+5.2%" or "-3")
   final String trend;
+
+  /// Whether the trend is positive (green) or negative (red)
   final bool isPositive;
+
+  /// Icon name to display (e.g., "people", "person_add")
   final String iconName;
 
   const KeyMetricsCardWidget({
@@ -25,7 +53,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      width: 160,
+      width: 160, // Fixed width for horizontal scrolling
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
@@ -42,9 +70,11 @@ class KeyMetricsCardWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Top row: Icon and trend indicator
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Icon container with background
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
@@ -57,6 +87,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
                   size: 20,
                 ),
               ),
+              // Trend badge (green for up, red for down)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -68,6 +99,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Up or down arrow
                     CustomIconWidget(
                       iconName: isPositive ? 'arrow_upward' : 'arrow_downward',
                       color: isPositive
@@ -76,6 +108,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
                       size: 12,
                     ),
                     const SizedBox(width: 2),
+                    // Trend percentage/number
                     Text(
                       trend,
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -91,6 +124,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          // Metric value (large number)
           Text(
             value,
             style: theme.textTheme.headlineSmall?.copyWith(
@@ -99,6 +133,7 @@ class KeyMetricsCardWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
+          // Metric title (small text)
           Text(
             title,
             style: theme.textTheme.bodySmall?.copyWith(

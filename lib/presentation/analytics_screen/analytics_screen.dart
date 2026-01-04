@@ -17,8 +17,29 @@ import './widgets/mutual_connection_chart_widget.dart';
 import './widgets/time_period_selector_widget.dart';
 import './widgets/unfollow_pattern_chart_widget.dart';
 
-/// Analytics Screen - Comprehensive follower relationship insights
-/// Features time period selection, interactive charts, key insights, and recommendations
+/// Analytics Screen - Deep insights into your TikTok follower relationships
+///
+/// This screen provides detailed analytics and AI-powered insights about:
+/// - Follower growth trends over time
+/// - Unfollow patterns (who unfollowed you and when)
+/// - Engagement correlation (how engagement affects followers)
+/// - Mutual connections analysis
+/// - Actionable recommendations to grow your account
+///
+/// Key Features:
+/// - Switch between Week, Month, and Year views
+/// - Interactive charts showing trends
+/// - AI-generated insights and recommendations
+/// - Comparison mode to compare different time periods
+/// - Export analytics as PDF or CSV
+/// - Pull down to refresh data
+///
+/// How it works:
+/// 1. Fetches your TikTok data (followers, following)
+/// 2. Sends data to AI for analysis
+/// 3. Generates insights for different time periods
+/// 4. Displays charts and recommendations
+/// 5. Caches results to reduce API calls
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
 
@@ -27,13 +48,21 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  // Loading state
   bool _isLoading = true;
+
+  // Selected time period: 'week', 'month', or 'year'
   String _selectedPeriod = 'week';
+
+  // Comparison mode - compare two time periods side by side
   bool _isComparisonMode = false;
   String _comparisonPeriod = 'month';
 
-  // Real analytics data from TikTok + OpenAI
+  // Analytics data for all time periods
+  // Structure: { 'week': {...}, 'month': {...}, 'year': {...} }
   Map<String, dynamic> _analyticsData = {};
+
+  // Services for data and AI
   final TikTokService _tiktokService = TikTokService();
   final OpenAIService _openaiService = OpenAIService();
   final CacheService _cacheService = CacheService();
@@ -41,9 +70,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   void initState() {
     super.initState();
+    // Load analytics when screen opens
     _loadAnalytics();
   }
 
+  /// Load analytics data from cache or generate new
+  ///
+  /// Process:
+  /// 1. Check if cached analytics exist and are not expired
+  /// 2. If valid cache exists, use it (fast)
+  /// 3. If no cache or expired, fetch from TikTok and analyze with AI
+  /// 4. Cache the new results for future use
   Future<void> _loadAnalytics() async {
     setState(() => _isLoading = true);
 
@@ -146,6 +183,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  /// Handle time period selection change
+  /// User taps Week, Month, or Year button
   void _onPeriodChanged(String period) {
     if (_selectedPeriod != period) {
       HapticFeedback.lightImpact();
@@ -154,11 +193,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  /// Toggle comparison mode on/off
+  /// Lets user compare two different time periods
   void _toggleComparisonMode() {
     HapticFeedback.mediumImpact();
     setState(() => _isComparisonMode = !_isComparisonMode);
   }
 
+  /// Handle comparison period selection
   void _onComparisonPeriodChanged(String period) {
     if (_comparisonPeriod != period) {
       HapticFeedback.lightImpact();
@@ -166,6 +208,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  /// Export analytics data in specified format
+  /// Formats: 'PDF' (detailed report) or 'CSV' (raw data)
   Future<void> _exportData(String format) async {
     HapticFeedback.mediumImpact();
 
@@ -197,6 +241,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     }
   }
 
+  /// Show bottom sheet with export options
+  /// User can choose PDF or CSV format
   void _showExportOptions() {
     final theme = Theme.of(context);
 

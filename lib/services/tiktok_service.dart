@@ -3,49 +3,373 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import './cache_service.dart';
 
-/// TikTok Service for fetching real follower and following data
-/// Singleton service that handles TikTok API integration
+/// TikTok Service - Handles all communication with TikTok's API
+/// This is a singleton (only one instance exists throughout the app)
+///
+/// Main responsibilities:
+/// - Fetch followers and following lists from TikTok
+/// - Remove followers and block users
+/// - Get user profile information
+/// - Fetch notifications from TikTok
+/// - Cache data locally for offline access
+///
+/// ⚠️ IMPORTANT: TikTok API Limitations & Compliance
+/// - Rate Limiting: Max 100 requests per minute per user
+/// - Data Scope: Only public profile data accessible via official APIs
+/// - Terms of Service: Bulk operations may violate TikTok's policies
+/// - Review Compliance: This app uses mock data for demonstration purposes
+///   Production use requires approved TikTok Developer account with proper scopes
 class TikTokService {
+  // Singleton pattern - ensures only one instance exists
   static final TikTokService _instance = TikTokService._internal();
-  late final Dio _dio;
-  final CacheService _cacheService = CacheService();
+  late final Dio _dio; // HTTP client for making API requests
+  final CacheService _cacheService = CacheService(); // Local data storage
+
+  // API configuration from environment variables
   static const String apiKey = String.fromEnvironment('TIKTOK_API_KEY');
   static const String apiBaseUrl = String.fromEnvironment(
     'TIKTOK_API_BASE_URL',
     defaultValue: 'https://open.tiktokapis.com/v2',
   );
 
+  // Rate limiting configuration
+  static const int maxRequestsPerMinute = 100;
+  static const Duration rateLimitWindow = Duration(minutes: 1);
+
+  // Track API requests for rate limiting
+  final List<DateTime> _requestTimestamps = [];
+  int _requestCount = 0;
+
+  // Factory constructor returns the same instance every time
   factory TikTokService() {
     return _instance;
   }
 
+  // Private constructor - called only once
   TikTokService._internal() {
     _initializeService();
   }
 
+  /// Initialize the HTTP client with default settings
   void _initializeService() {
     _dio = Dio(
       BaseOptions(
         baseUrl: apiBaseUrl,
         headers: {'Content-Type': 'application/json'},
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
+        connectTimeout: const Duration(
+          seconds: 30,
+        ), // Wait max 30 seconds for connection
+        receiveTimeout: const Duration(
+          seconds: 30,
+        ), // Wait max 30 seconds for response
       ),
     );
   }
 
+  // Expose the HTTP client for advanced usage
   Dio get dio => _dio;
 
-  /// Get access token from storage
+  /// Check if we're within rate limits before making API call
+  /// Throws TikTokRateLimitException if limit exceeded
+  Future<void> _checkRateLimit() async {
+    final now = DateTime.now();
+
+    // Remove timestamps older than rate limit window
+    _requestTimestamps.removeWhere(
+      (timestamp) => now.difference(timestamp) > rateLimitWindow,
+    );
+
+    // Check if we've exceeded the rate limit
+    if (_requestTimestamps.length >= maxRequestsPerMinute) {
+      final oldestRequest = _requestTimestamps.first;
+      final waitTime = rateLimitWindow - now.difference(oldestRequest);
+
+      throw TikTokRateLimitException(
+        message:
+            'Rate limit exceeded. Please wait ${waitTime.inSeconds} seconds.',
+        retryAfter: waitTime,
+      );
+    }
+
+    // Add current request timestamp
+    _requestTimestamps.add(now);
+  }
+
+  /// Throttle requests to avoid hitting rate limits
+  /// Adds delay between requests if needed
+  Future<void> _throttleRequest() async {
+    if (_requestTimestamps.length >= maxRequestsPerMinute - 10) {
+      // Slow down when approaching limit
+      await Future.delayed(const Duration(milliseconds: 600));
+    }
+  }
+
+  /// Get the user's TikTok access token from local storage
+  /// Returns null if user hasn't logged in yet
   Future<String?> _getAccessToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('tiktok_access_token');
   }
 
-  /// Fetch followers list from TikTok API
-  /// Returns list sorted by latest followers first
+  /// Remove a follower from your TikTok account
+  ///
+  /// Parameters:
+  /// - userId: The TikTok user ID to remove
+  ///
+  /// Returns:
+  /// - true if removal was successful
+  /// - false if removal failed
+  ///
+  /// Throws TikTokException if there's an error
+  Future<bool> removeFollower(String userId) async {
+    try {
+      await _checkRateLimit();
+      await _throttleRequest();
+
+      final accessToken = await _getAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        throw TikTokException(
+          statusCode: 401,
+          message: 'No access token found. Please login with TikTok.',
+        );
+      }
+
+      // For testing mode, simulate success without calling real API
+      if (accessToken == 'mock_tiktok_access_token_for_testing') {
+        await Future.delayed(const Duration(milliseconds: 500));
+        return true;
+      }
+
+      // Make DELETE request to TikTok API
+      final response = await _dio.delete(
+        '/user/followers/$userId/',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+
+      // Check if request was successful
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        // Update local cache by removing the follower
+        final cachedFollowers = await _cacheService.getCachedFollowers();
+        if (cachedFollowers != null) {
+          cachedFollowers.removeWhere((f) => f['id'] == userId);
+          await _cacheService.cacheFollowers(cachedFollowers);
+        }
+        return true;
+      }
+
+      return false;
+    } on TikTokRateLimitException {
+      rethrow;
+    } on DioException catch (e) {
+      // Handle specific API errors
+      if (e.response?.statusCode == 429) {
+        throw TikTokRateLimitException(
+          message: 'Too many requests. Please try again later.',
+          retryAfter: const Duration(minutes: 1),
+        );
+      }
+      if (e.response?.statusCode == 403) {
+        throw TikTokPermissionException(
+          message:
+              'Insufficient permissions. This action requires additional TikTok API scopes.',
+        );
+      }
+      // Handle network errors
+      throw TikTokException(
+        statusCode: e.response?.statusCode ?? 500,
+        message:
+            e.response?.data['error']?['message'] ??
+            e.message ??
+            'Failed to remove follower',
+      );
+    }
+  }
+
+  /// Block a user on TikTok
+  /// This will also remove them from your followers list
+  ///
+  /// Parameters:
+  /// - userId: The TikTok user ID to block
+  ///
+  /// Returns:
+  /// - true if blocking was successful
+  /// - false if blocking failed
+  Future<bool> blockUser(String userId) async {
+    try {
+      await _checkRateLimit();
+      await _throttleRequest();
+
+      final accessToken = await _getAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        throw TikTokException(
+          statusCode: 401,
+          message: 'No access token found. Please login with TikTok.',
+        );
+      }
+
+      // For testing mode, simulate success
+      if (accessToken == 'mock_tiktok_access_token_for_testing') {
+        await Future.delayed(const Duration(milliseconds: 500));
+        return true;
+      }
+
+      // Make POST request to block the user
+      final response = await _dio.post(
+        '/user/block/',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+        data: {'user_id': userId},
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Remove blocked user from both followers and following cache
+        final cachedFollowers = await _cacheService.getCachedFollowers();
+        if (cachedFollowers != null) {
+          cachedFollowers.removeWhere((f) => f['id'] == userId);
+          await _cacheService.cacheFollowers(cachedFollowers);
+        }
+
+        final cachedFollowing = await _cacheService.getCachedFollowing();
+        if (cachedFollowing != null) {
+          cachedFollowing.removeWhere((f) => f['id'] == userId);
+          await _cacheService.cacheFollowing(cachedFollowing);
+        }
+
+        return true;
+      }
+
+      return false;
+    } on TikTokRateLimitException {
+      rethrow;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 429) {
+        throw TikTokRateLimitException(
+          message: 'Too many requests. Please try again later.',
+          retryAfter: const Duration(minutes: 1),
+        );
+      }
+      if (e.response?.statusCode == 403) {
+        throw TikTokPermissionException(
+          message:
+              'Insufficient permissions. This action requires additional TikTok API scopes.',
+        );
+      }
+      throw TikTokException(
+        statusCode: e.response?.statusCode ?? 500,
+        message:
+            e.response?.data['error']?['message'] ??
+            e.message ??
+            'Failed to block user',
+      );
+    }
+  }
+
+  /// Remove multiple followers at once (batch operation)
+  ///
+  /// ⚠️ WARNING: Batch operations may violate TikTok's Terms of Service
+  /// Use with caution and respect rate limits
+  ///
+  /// Parameters:
+  /// - userIds: List of TikTok user IDs to remove
+  ///
+  /// Returns a map with:
+  /// - results: Map of userId -> success/failure
+  /// - errors: Map of userId -> error message
+  /// - successCount: Number of successful removals
+  /// - failureCount: Number of failed removals
+  Future<Map<String, dynamic>> batchRemoveFollowers(
+    List<String> userIds,
+  ) async {
+    final results = <String, bool>{};
+    final errors = <String, String>{};
+
+    // Limit batch size to prevent rate limit issues
+    const maxBatchSize = 10;
+    if (userIds.length > maxBatchSize) {
+      throw TikTokException(
+        statusCode: 400,
+        message:
+            'Batch size limited to $maxBatchSize users to comply with rate limits.',
+      );
+    }
+
+    // Process each user one by one with throttling
+    for (final userId in userIds) {
+      try {
+        final success = await removeFollower(userId);
+        results[userId] = success;
+      } on TikTokRateLimitException catch (e) {
+        // Stop processing if rate limit hit
+        errors[userId] = e.message;
+        results[userId] = false;
+        break;
+      } catch (e) {
+        results[userId] = false;
+        errors[userId] = e.toString();
+      }
+    }
+
+    return {
+      'results': results,
+      'errors': errors,
+      'successCount': results.values.where((v) => v).length,
+      'failureCount': results.values.where((v) => !v).length,
+    };
+  }
+
+  /// Block multiple users at once (batch operation)
+  ///
+  /// ⚠️ WARNING: Batch operations may violate TikTok's Terms of Service
+  /// Use with caution and respect rate limits
+  ///
+  /// Parameters:
+  /// - userIds: List of TikTok user IDs to block
+  ///
+  /// Returns a map with results, errors, and counts (same as batchRemoveFollowers)
+  Future<Map<String, dynamic>> batchBlockUsers(List<String> userIds) async {
+    final results = <String, bool>{};
+    final errors = <String, String>{};
+
+    // Limit batch size to prevent rate limit issues
+    const maxBatchSize = 10;
+    if (userIds.length > maxBatchSize) {
+      throw TikTokException(
+        statusCode: 400,
+        message:
+            'Batch size limited to $maxBatchSize users to comply with rate limits.',
+      );
+    }
+
+    for (final userId in userIds) {
+      try {
+        final success = await blockUser(userId);
+        results[userId] = success;
+      } on TikTokRateLimitException catch (e) {
+        // Stop processing if rate limit hit
+        errors[userId] = e.message;
+        results[userId] = false;
+        break;
+      } catch (e) {
+        results[userId] = false;
+        errors[userId] = e.toString();
+      }
+    }
+
+    return {
+      'results': results,
+      'errors': errors,
+      'successCount': results.values.where((v) => v).length,
+      'failureCount': results.values.where((v) => !v).length,
+    };
+  }
+
+  /// Fetch your followers list from TikTok
+  /// Returns list sorted by newest followers first
+  /// Uses cache if available and not expired
   Future<List<Map<String, dynamic>>> fetchFollowers() async {
     try {
+      await _checkRateLimit();
+      await _throttleRequest();
+
       // Try to get from cache first if offline
       final cachedFollowers = await _cacheService.getCachedFollowers();
       final isCacheExpired = await _cacheService.isFollowersCacheExpired();
@@ -104,7 +428,7 @@ class TikTokService {
         };
       }).toList();
 
-      // Sort by latest first (most recent follows at top)
+      // Sort by newest first (most recent follows at top)
       followers.sort(
         (a, b) => (b['followDate'] as DateTime).compareTo(
           a['followDate'] as DateTime,
@@ -197,7 +521,7 @@ class TikTokService {
         };
       }).toList();
 
-      // Sort by latest first (most recent follows at top)
+      // Sort by newest first (most recent follows at top)
       following.sort(
         (a, b) => (b['followDate'] as DateTime).compareTo(
           a['followDate'] as DateTime,
@@ -763,4 +1087,25 @@ class TikTokException implements Exception {
 
   @override
   String toString() => 'TikTokException($statusCode): $message';
+}
+
+/// TikTok Rate Limit Exception
+class TikTokRateLimitException implements Exception {
+  final String message;
+  final Duration? retryAfter;
+
+  TikTokRateLimitException({required this.message, this.retryAfter});
+
+  @override
+  String toString() => 'TikTokRateLimitException: $message';
+}
+
+/// TikTok Permission Exception
+class TikTokPermissionException implements Exception {
+  final String message;
+
+  TikTokPermissionException({required this.message});
+
+  @override
+  String toString() => 'TikTokPermissionException: $message';
 }

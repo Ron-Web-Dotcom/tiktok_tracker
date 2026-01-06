@@ -2,9 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
+import '../../../services/tiktok_service.dart';
 
-class AccountDeletionWidget extends StatelessWidget {
-  const AccountDeletionWidget({super.key});
+class AccountDeletionWidget extends StatefulWidget {
+  final TikTokService tiktokService;
+
+  const AccountDeletionWidget({super.key, required this.tiktokService});
+
+  @override
+  State<AccountDeletionWidget> createState() => _AccountDeletionWidgetState();
+}
+
+class _AccountDeletionWidgetState extends State<AccountDeletionWidget> {
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +57,9 @@ class AccountDeletionWidget extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
-              onPressed: () => _showDeletionDialog(context),
+              onPressed: _isDeleting
+                  ? null
+                  : () => _showDeletionDialog(context),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.errorLight,
                 side: BorderSide(color: AppTheme.errorLight),
@@ -56,13 +68,22 @@ class AccountDeletionWidget extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8.0),
                 ),
               ),
-              child: Text(
-                'Delete My Account',
-                style: GoogleFonts.inter(
-                  fontSize: 13.sp,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              child: _isDeleting
+                  ? SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.errorLight,
+                      ),
+                    )
+                  : Text(
+                      'Delete My Account',
+                      style: GoogleFonts.inter(
+                        fontSize: 13.sp,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -169,15 +190,49 @@ class AccountDeletionWidget extends StatelessWidget {
     );
   }
 
-  void _confirmDeletion(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Account deletion scheduled. 7-day recovery period active.',
-        ),
-        backgroundColor: AppTheme.warningLight,
-        duration: const Duration(seconds: 4),
-      ),
-    );
+  Future<void> _confirmDeletion(BuildContext context) async {
+    setState(() => _isDeleting = true);
+
+    try {
+      // Call real TikTok service to delete account
+      final success = await widget.tiktokService.deleteUserAccount();
+
+      setState(() => _isDeleting = false);
+
+      if (success && mounted) {
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Account deletion scheduled. 7-day recovery period active.',
+            ),
+            backgroundColor: AppTheme.warningLight,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+
+        // Navigate back to login screen after short delay
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) {
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            AppRoutes.login,
+            (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _isDeleting = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete account: ${e.toString()}'),
+            backgroundColor: AppTheme.errorLight,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 }

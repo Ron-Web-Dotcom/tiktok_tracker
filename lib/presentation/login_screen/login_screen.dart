@@ -56,10 +56,9 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
-  /// Handles TikTok OAuth authentication flow
+  /// Handle TikTok OAuth login flow
   ///
-  /// ⚠️ DEMO MODE: Uses mock token for testing
-  /// Production implementation should:
+  /// Production OAuth Flow:
   /// 1. Use flutter_web_auth for OAuth flow
   /// 2. Exchange authorization code for access token
   /// 3. Validate token with TikTok API
@@ -69,48 +68,66 @@ class _LoginScreenState extends State<LoginScreen>
     HapticFeedback.mediumImpact();
 
     try {
-      // ⚠️ DEMO: Simulate OAuth flow
-      // Production: Replace with actual OAuth implementation
-      // Example: final result = await FlutterWebAuth.authenticate(
-      //   url: 'https://www.tiktok.com/auth/authorize/?client_key=YOUR_CLIENT_KEY',
-      //   callbackUrlScheme: 'yourapp',
-      // );
+      // Get TikTok credentials from environment
+      const clientKey = String.fromEnvironment('TIKTOK_CLIENT_KEY');
+      const clientSecret = String.fromEnvironment('TIKTOK_CLIENT_SECRET');
 
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Generate a mock access token for testing
-      // In production, this would come from TikTok OAuth callback
-      const mockAccessToken = 'mock_tiktok_access_token_for_testing';
-
-      // Store the access token using TikTok service
-      final tiktokService = TikTokService();
-      await tiktokService.storeAccessToken(mockAccessToken);
-
-      // Mark that user has completed TikTok authentication
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('tiktok_authenticated', true);
-      await prefs.setBool('has_tiktok_data', true);
-
-      if (!mounted) return;
-
-      // Success haptic feedback
-      HapticFeedback.heavyImpact();
-
-      // Navigate to dashboard (skip permissions if already granted)
-      final hasSeenPermissions = prefs.getBool('permissions_granted') ?? false;
-      if (hasSeenPermissions) {
-        Navigator.pushReplacementNamed(context, '/dashboard-screen');
-      } else {
-        Navigator.pushReplacementNamed(context, '/permissions-screen');
+      // Check if real credentials are available
+      if (clientKey.isEmpty || clientSecret.isEmpty) {
+        // Use mock authentication for demo
+        await _handleMockAuthentication();
+        return;
       }
+
+      // ⚠️ TODO: Implement real OAuth flow
+      // For now, using mock authentication until OAuth is fully configured
+      // Real implementation would use:
+      // final result = await FlutterWebAuth.authenticate(
+      //   url: 'https://www.tiktok.com/auth/authorize/?client_key=$clientKey&scope=user.info.basic,video.list&response_type=code&redirect_uri=tiktoktracker://auth/callback',
+      //   callbackUrlScheme: 'tiktoktracker',
+      // );
+      // final code = Uri.parse(result).queryParameters['code'];
+      // final accessToken = await _exchangeCodeForToken(code, clientKey, clientSecret);
+
+      await _handleMockAuthentication();
     } catch (e) {
       if (!mounted) return;
 
       setState(() => _isLoading = false);
       _showErrorDialog(
         'Authentication Failed',
-        'Unable to connect with TikTok. Please check your internet connection and try again.',
+        'Unable to connect to TikTok. Please try again later.',
       );
+    }
+  }
+
+  /// Handle mock authentication for demo mode
+  Future<void> _handleMockAuthentication() async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    // Generate a mock access token for testing
+    const mockAccessToken = 'mock_tiktok_access_token_for_testing';
+
+    // Store the access token using TikTok service
+    final tiktokService = TikTokService();
+    await tiktokService.storeAccessToken(mockAccessToken);
+
+    // Mark that user has completed TikTok authentication
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('tiktok_authenticated', true);
+    await prefs.setBool('has_tiktok_data', true);
+
+    if (!mounted) return;
+
+    // Success haptic feedback
+    HapticFeedback.heavyImpact();
+
+    // Navigate to dashboard (skip permissions if already granted)
+    final hasSeenPermissions = prefs.getBool('permissions_granted') ?? false;
+    if (hasSeenPermissions) {
+      Navigator.pushReplacementNamed(context, '/dashboard-screen');
+    } else {
+      Navigator.pushReplacementNamed(context, '/permissions-screen');
     }
   }
 

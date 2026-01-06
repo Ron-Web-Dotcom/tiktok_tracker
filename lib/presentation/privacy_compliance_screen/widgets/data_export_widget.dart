@@ -1,10 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
+import '../../../services/tiktok_service.dart';
 
 class DataExportWidget extends StatefulWidget {
-  const DataExportWidget({super.key});
+  final TikTokService tiktokService;
+
+  const DataExportWidget({super.key, required this.tiktokService});
 
   @override
   State<DataExportWidget> createState() => _DataExportWidgetState();
@@ -95,30 +100,155 @@ class _DataExportWidgetState extends State<DataExportWidget> {
   Future<void> _exportData() async {
     setState(() => _isExporting = true);
 
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Fetch real user data from TikTok service
+      final exportData = await widget.tiktokService.exportUserData();
 
-    if (mounted) {
+      // Convert to formatted JSON
+      final jsonString = const JsonEncoder.withIndent('  ').convert(exportData);
+
       setState(() => _isExporting = false);
 
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            'Export Requested',
-            style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-          ),
-          content: Text(
-            'Your data export has been requested. You will receive a secure download link via email within 24 hours.',
-            style: GoogleFonts.inter(fontSize: 13.sp),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('OK'),
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              'Data Export Ready',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w600),
             ),
-          ],
-        ),
-      );
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your data has been successfully exported:',
+                  style: GoogleFonts.inter(fontSize: 13.sp),
+                ),
+                SizedBox(height: 1.h),
+                Container(
+                  padding: EdgeInsets.all(2.w),
+                  decoration: BoxDecoration(
+                    color: AppTheme.backgroundLight,
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDataStat(
+                        'Followers',
+                        exportData['statistics']['totalFollowers'].toString(),
+                      ),
+                      _buildDataStat(
+                        'Following',
+                        exportData['statistics']['totalFollowing'].toString(),
+                      ),
+                      _buildDataStat(
+                        'Notifications',
+                        exportData['statistics']['totalNotifications']
+                            .toString(),
+                      ),
+                      _buildDataStat(
+                        'Export Date',
+                        DateTime.parse(
+                          exportData['exportDate'],
+                        ).toString().split('.')[0],
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 1.h),
+                Text(
+                  'Data size: ${(jsonString.length / 1024).toStringAsFixed(2)} KB',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.sp,
+                    color: AppTheme.textSecondaryLight,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showExportSuccess();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryLight,
+                ),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isExporting = false);
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              'Export Failed',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: AppTheme.errorLight,
+              ),
+            ),
+            content: Text(
+              'Failed to export data: ${e.toString()}',
+              style: GoogleFonts.inter(fontSize: 13.sp),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
+  }
+
+  Widget _buildDataStat(String label, String value) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 0.3.h),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              color: AppTheme.textSecondaryLight,
+            ),
+          ),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 12.sp,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.textPrimaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showExportSuccess() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Data export completed successfully'),
+        backgroundColor: AppTheme.successLight,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 }

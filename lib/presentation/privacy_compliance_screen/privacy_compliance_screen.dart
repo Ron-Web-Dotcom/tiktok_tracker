@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
+import '../../services/tiktok_service.dart';
 import '../../widgets/custom_app_bar.dart';
 import './widgets/account_deletion_widget.dart';
 import './widgets/compliance_badge_widget.dart';
@@ -13,14 +14,91 @@ class PrivacyComplianceScreen extends StatefulWidget {
   const PrivacyComplianceScreen({super.key});
 
   @override
-  State<PrivacyComplianceScreen> createState() => _PrivacyComplianceScreenState();
+  State<PrivacyComplianceScreen> createState() =>
+      _PrivacyComplianceScreenState();
 }
 
 class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
+  final TikTokService _tiktokService = TikTokService();
   bool _dataCollectionEnabled = true;
   bool _analyticsEnabled = true;
   bool _crashReportingEnabled = true;
   bool _isVerifying = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrivacySettings();
+  }
+
+  /// Load current privacy settings from TikTok service
+  Future<void> _loadPrivacySettings() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final settings = await _tiktokService.getPrivacySettings();
+      setState(() {
+        _dataCollectionEnabled = settings['dataCollectionEnabled'] ?? true;
+        _analyticsEnabled = settings['analyticsEnabled'] ?? true;
+        _crashReportingEnabled = settings['crashReportingEnabled'] ?? true;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load settings: ${e.toString()}'),
+            backgroundColor: AppTheme.errorLight,
+          ),
+        );
+      }
+    }
+  }
+
+  /// Update privacy setting and save to TikTok service
+  Future<void> _updatePrivacySetting(String settingName, bool value) async {
+    try {
+      switch (settingName) {
+        case 'dataCollection':
+          await _tiktokService.updatePrivacySettings(
+            dataCollectionEnabled: value,
+          );
+          setState(() => _dataCollectionEnabled = value);
+          break;
+        case 'analytics':
+          await _tiktokService.updatePrivacySettings(analyticsEnabled: value);
+          setState(() => _analyticsEnabled = value);
+          break;
+        case 'crashReporting':
+          await _tiktokService.updatePrivacySettings(
+            crashReportingEnabled: value,
+          );
+          setState(() => _crashReportingEnabled = value);
+          break;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Privacy setting updated'),
+            backgroundColor: AppTheme.successLight,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update setting: ${e.toString()}'),
+            backgroundColor: AppTheme.errorLight,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +114,9 @@ class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
           ),
         ],
       ),
-      body: _isVerifying
+      body: _isLoading
+          ? _buildLoadingState()
+          : _isVerifying
           ? _buildVerificationLoader()
           : RefreshIndicator(
               onRefresh: _refreshCompliance,
@@ -60,7 +140,7 @@ class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
                       description: 'Minimal follower metrics only',
                       isEnabled: _dataCollectionEnabled,
                       onToggle: (value) {
-                        setState(() => _dataCollectionEnabled = value);
+                        _updatePrivacySetting('dataCollection', value);
                       },
                       details: [
                         'Follower count and basic profile info',
@@ -75,7 +155,7 @@ class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
                       description: 'Process data for insights',
                       isEnabled: _analyticsEnabled,
                       onToggle: (value) {
-                        setState(() => _analyticsEnabled = value);
+                        _updatePrivacySetting('analytics', value);
                       },
                       details: [
                         'Generate follower growth trends',
@@ -90,7 +170,7 @@ class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
                       description: 'Help improve app stability',
                       isEnabled: _crashReportingEnabled,
                       onToggle: (value) {
-                        setState(() => _crashReportingEnabled = value);
+                        _updatePrivacySetting('crashReporting', value);
                       },
                       details: [
                         'Anonymous error logs only',
@@ -124,14 +204,33 @@ class _PrivacyComplianceScreenState extends State<PrivacyComplianceScreen> {
                     SizedBox(height: 2.h),
                     _buildSectionHeader('Your Data Rights'),
                     SizedBox(height: 1.h),
-                    DataExportWidget(),
+                    DataExportWidget(tiktokService: _tiktokService),
                     SizedBox(height: 1.h),
-                    AccountDeletionWidget(),
+                    AccountDeletionWidget(tiktokService: _tiktokService),
                     SizedBox(height: 3.h),
                   ],
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: AppTheme.primaryLight),
+          SizedBox(height: 2.h),
+          Text(
+            'Loading privacy settings...',
+            style: GoogleFonts.inter(
+              fontSize: 14.sp,
+              color: AppTheme.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

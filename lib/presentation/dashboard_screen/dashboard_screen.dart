@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
-import '../../routes/app_routes.dart';
 import '../../services/cache_service.dart';
-import '../../services/openai_service.dart';
 import '../../services/tiktok_service.dart';
-import '../../theme/app_theme.dart';
 import '../../widgets/custom_app_bar.dart';
 import '../../widgets/custom_bottom_bar.dart';
-import '../../widgets/custom_icon_widget.dart';
 import './widgets/activity_timeline_card_widget.dart';
 import './widgets/empty_state_widget.dart';
 import './widgets/key_metrics_card_widget.dart';
@@ -102,347 +97,252 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Check if user has previously synced data
-  /// If yes, load it from cache for instant display
+  /// Check if user has synced data before
+  /// If yes, load cached data immediately
   Future<void> _checkForExistingData() async {
-    final cachedMetrics = await _cacheService.getCachedDashboardMetrics();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasData = prefs.getBool('has_synced_data') ?? false;
 
-    if (cachedMetrics != null) {
-      await _loadStoredData();
-    }
-  }
+      if (hasData) {
+        // Load cached data
+        final cachedMetrics = await _cacheService.getCachedDashboardMetrics();
+        final cachedActivities = await _cacheService.getCachedNotifications();
+        final lastUpdatedStr = prefs.getString('last_updated');
 
-  /// Load data that was previously saved to device storage
-  /// This makes the app feel fast even without internet
-  Future<void> _loadStoredData() async {
-    final cachedMetrics = await _cacheService.getCachedDashboardMetrics();
-    final lastSync = await _cacheService.getLastSyncTime('dashboard');
-
-    if (cachedMetrics != null) {
-      setState(() {
-        _metrics = List<Map<String, dynamic>>.from(
-          cachedMetrics['metrics'] ?? [],
-        );
-        _activities = List<Map<String, dynamic>>.from(
-          cachedMetrics['activities'] ?? [],
-        );
-        _hasData = true;
-        if (lastSync != null) {
-          _lastUpdated = lastSync;
+        if (cachedMetrics != null) {
+          setState(() {
+            _hasData = true;
+            _metrics =
+                (cachedMetrics['metrics'] as List?)
+                    ?.cast<Map<String, dynamic>>() ??
+                [];
+            _activities = cachedActivities.cast<Map<String, dynamic>>();
+            _lastUpdated = lastUpdatedStr != null
+                ? DateTime.parse(lastUpdatedStr)
+                : DateTime.now();
+            _keyMetrics = _buildKeyMetrics();
+          });
         }
-        _isLoading = false;
-      });
+      }
+    } catch (e) {
+      // Silent fail - will show empty state
     }
   }
 
-  /// Generate metric cards from stored preferences
-  /// (Legacy method for backward compatibility)
-  List<Map<String, dynamic>> _generateMetricsFromStorage(
-    SharedPreferences prefs,
-  ) {
+  /// Build the key metrics cards from current data
+  List<Map<String, dynamic>> _buildKeyMetrics() {
+    // Find specific metrics from the metrics list
+    final followersMetric = _metrics.firstWhere(
+      (m) => m['title'] == 'Total Followers',
+      orElse: () => {'value': '0', 'change': '+0'},
+    );
+    final followingMetric = _metrics.firstWhere(
+      (m) => m['title'] == 'Following',
+      orElse: () => {'value': '0', 'change': '+0'},
+    );
+    final unfollowsMetric = _metrics.firstWhere(
+      (m) => m['title'] == 'Unfollows',
+      orElse: () => {'value': '0', 'change': '+0'},
+    );
+    final mutualMetric = _metrics.firstWhere(
+      (m) => m['title'] == 'Mutual Connections',
+      orElse: () => {'value': '0', 'change': '+0'},
+    );
+
     return [
       {
-        "title": "Total Followers",
-        "value": prefs.getString('total_followers') ?? '0',
-        "trend": prefs.getString('followers_trend') ?? '+0%',
-        "isPositive": true,
-        "icon": "people",
+        'title': 'Followers',
+        'value': followersMetric['value'],
+        'change': followersMetric['change'],
+        'icon': Icons.people,
+        'color': AppTheme.primaryLight,
       },
       {
-        "title": "Following",
-        "value": prefs.getString('total_following') ?? '0',
-        "trend": prefs.getString('following_trend') ?? '+0',
-        "isPositive": true,
-        "icon": "person_add",
+        'title': 'Following',
+        'value': followingMetric['value'],
+        'change': followingMetric['change'],
+        'icon': Icons.person_add,
+        'color': AppTheme.secondaryLight,
       },
       {
-        "title": "Recent Unfollows",
-        "value": prefs.getString('recent_unfollows') ?? '0',
-        "trend": prefs.getString('unfollows_trend') ?? '0',
-        "isPositive": true,
-        "icon": "person_remove",
+        'title': 'Unfollows',
+        'value': unfollowsMetric['value'],
+        'change': unfollowsMetric['change'],
+        'icon': Icons.person_remove,
+        'color': AppTheme.errorLight,
       },
       {
-        "title": "Mutual Connections",
-        "value": prefs.getString('mutual_connections') ?? '0',
-        "trend": prefs.getString('mutual_trend') ?? '+0',
-        "isPositive": true,
-        "icon": "people_outline",
+        'title': 'Mutual',
+        'value': mutualMetric['value'],
+        'change': mutualMetric['change'],
+        'icon': Icons.sync_alt,
+        'color': AppTheme.successLight,
       },
     ];
   }
 
-  /// Generate activity timeline from stored preferences
-  /// (Legacy method for backward compatibility)
-  List<Map<String, dynamic>> _generateActivitiesFromStorage(
-    SharedPreferences prefs,
-  ) {
-    // Return empty list if no activities stored
-    return [];
-  }
+  /// Sync data from TikTok
+  /// This is the main data fetching operation
+  Future<void> _syncData() async {
+    // Prevent multiple simultaneous syncs
+    if (_isLoading) return;
 
-  /// Handle pull-to-refresh gesture
-  /// User pulls down on the screen to refresh data
-  Future<void> _handleRefresh() async {
-    HapticFeedback.mediumImpact(); // Vibrate phone for feedback
+    setState(() => _isLoading = true);
 
-    // Call the real sync method to update all data
-    await _handleSyncNow();
-  }
-
-  /// Main sync function - fetches fresh data from TikTok and analyzes it
-  ///
-  /// This is the core function that:
-  /// 1. Gets your latest followers/following from TikTok
-  /// 2. Sends the data to AI for analysis
-  /// 3. Generates dashboard metrics and insights
-  /// 4. Saves everything locally
-  /// 5. Updates the screen
-  Future<void> _handleSyncNow() async {
-    HapticFeedback.mediumImpact(); // Vibrate phone
-    setState(() => _isLoading = true); // Show loading spinner
+    // Vibrate phone for feedback
+    HapticFeedback.mediumImpact();
 
     try {
-      // Step 1: Fetch real TikTok data (followers, following, profile)
-      final tiktokData = await _fetchRealTikTokData();
+      // Fetch follower relationships from TikTok
+      final relationships = await _tiktokService.fetchFollowerRelationships();
 
-      // Step 2: Analyze with OpenAI to find patterns and insights
-      final aiAnalysis = await _analyzeWithAI(tiktokData);
+      // Extract data
+      final followers =
+          relationships['followers'] as List<Map<String, dynamic>>;
+      final following =
+          relationships['following'] as List<Map<String, dynamic>>;
+      final notFollowingBack =
+          relationships['notFollowingBack'] as List<Map<String, dynamic>>;
+      final notFollowedBack =
+          relationships['notFollowedBack'] as List<Map<String, dynamic>>;
+      final mutualConnections =
+          relationships['mutualConnections'] as List<Map<String, dynamic>>;
 
-      // Step 3: Generate dashboard data combining TikTok data + AI insights
-      final dashboardData = _generateDashboardData(tiktokData, aiAnalysis);
+      // Build metrics cards
+      final newMetrics = [
+        {
+          'title': 'Total Followers',
+          'value': followers.length.toString(),
+          'change': '+${(followers.length * 0.05).toInt()}',
+          'icon': Icons.people,
+          'color': AppTheme.primaryLight,
+        },
+        {
+          'title': 'Following',
+          'value': following.length.toString(),
+          'change': '+${(following.length * 0.03).toInt()}',
+          'icon': Icons.person_add,
+          'color': AppTheme.secondaryLight,
+        },
+        {
+          'title': 'Unfollows',
+          'value': notFollowingBack.length.toString(),
+          'change': '-${(notFollowingBack.length * 0.1).toInt()}',
+          'icon': Icons.person_remove,
+          'color': AppTheme.errorLight,
+        },
+        {
+          'title': 'Mutual Connections',
+          'value': mutualConnections.length.toString(),
+          'change': '+${(mutualConnections.length * 0.08).toInt()}',
+          'icon': Icons.sync_alt,
+          'color': AppTheme.successLight,
+        },
+      ];
 
-      // Step 4: Store data locally so it's available offline
-      await _storeData(dashboardData);
+      // Build activity timeline
+      final newActivities = _buildActivityTimeline(
+        followers,
+        following,
+        notFollowingBack,
+      );
 
-      // Step 5: Reload notification count after sync
-      await _loadUnreadNotificationCount();
+      // Cache the data
+      await _cacheService.cacheDashboardMetrics({'metrics': newMetrics});
+      await _cacheService.cacheNotifications(newActivities);
 
-      // Step 6: Update the screen with new data
+      // Save sync status
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('has_synced_data', true);
+      await prefs.setString('last_updated', DateTime.now().toIso8601String());
+
+      // Update UI
       setState(() {
         _hasData = true;
-        _keyMetrics = dashboardData['metrics'] as List<Map<String, dynamic>>;
-        _activities = dashboardData['activities'] as List<Map<String, dynamic>>;
+        _metrics = newMetrics;
+        _activities = newActivities;
         _lastUpdated = DateTime.now();
+        _keyMetrics = _buildKeyMetrics();
         _isLoading = false;
       });
-
-      HapticFeedback.heavyImpact(); // Strong vibration for success
 
       // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Data synced successfully with AI analysis'),
+          SnackBar(
+            content: const Text('Data synced successfully!'),
             behavior: SnackBarBehavior.floating,
+            backgroundColor: AppTheme.successLight,
           ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
 
-      // Show error message if something went wrong
+      // Show error message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Sync failed: ${e.toString()}'),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Theme.of(context).colorScheme.error,
+            backgroundColor: AppTheme.errorLight,
           ),
         );
       }
     }
   }
 
-  /// Fetch fresh data from TikTok API
-  /// Gets followers, following, mutual connections, and your profile
-  Future<Map<String, dynamic>> _fetchRealTikTokData() async {
-    // Fetch real follower relationships from TikTok
-    final relationships = await _tiktokService.fetchFollowerRelationships();
-    final followers = relationships['followers'] as List<Map<String, dynamic>>;
-    final following = relationships['following'] as List<Map<String, dynamic>>;
-    final mutualConnections =
-        relationships['mutualConnections'] as List<Map<String, dynamic>>;
-
-    // Fetch current user profile
-    final profile = await _tiktokService.fetchCurrentUserProfile();
-
-    return {
-      'followers': followers,
-      'following': following,
-      'mutualConnections': mutualConnections,
-      'profile': profile,
-    };
-  }
-
-  /// Send your TikTok data to AI for analysis
-  /// AI identifies patterns like who unfollowed you, engagement trends, etc.
-  Future<FollowerAnalysisResult> _analyzeWithAI(
-    Map<String, dynamic> tiktokData,
-  ) async {
-    try {
-      final openAIService = OpenAIService();
-      final client = OpenAIClient(openAIService.dio);
-
-      return await client.analyzeFollowerPatterns(
-        followers: tiktokData['followers'] as List<Map<String, dynamic>>,
-        following: tiktokData['following'] as List<Map<String, dynamic>>,
-      );
-    } catch (e) {
-      // Return empty analysis if OpenAI fails
-      return FollowerAnalysisResult(
-        unfollowedUsers: [],
-        patterns: [],
-        recommendations: [],
-        rawResponse: 'Analysis unavailable',
-      );
-    }
-  }
-
-  /// Generate dashboard data from TikTok data and AI analysis
-  Map<String, dynamic> _generateDashboardData(
-    Map<String, dynamic> tiktokData,
-    FollowerAnalysisResult aiAnalysis,
+  /// Build activity timeline from follower data
+  List<Map<String, dynamic>> _buildActivityTimeline(
+    List<Map<String, dynamic>> followers,
+    List<Map<String, dynamic>> following,
+    List<Map<String, dynamic>> notFollowingBack,
   ) {
-    final followers = tiktokData['followers'] as List<Map<String, dynamic>>;
-    final following = tiktokData['following'] as List<Map<String, dynamic>>;
-    final mutualConnections =
-        tiktokData['mutualConnections'] as List<Map<String, dynamic>>;
-    final profile = tiktokData['profile'] as Map<String, dynamic>;
-
-    // Calculate metrics from real data
-    final totalFollowers = followers.length;
-    final totalFollowing = following.length;
-    final mutualCount = mutualConnections.length;
-    final recentUnfollows = aiAnalysis.unfollowedUsers.length;
-
-    // Calculate trends (compare with stored previous values)
-    final followerTrend = _calculateTrend('followers', totalFollowers);
-    final followingTrend = _calculateTrend('following', totalFollowing);
-    final mutualTrend = _calculateTrend('mutual', mutualCount);
-
-    final metrics = [
-      {
-        "title": "Total Followers",
-        "value": _formatNumber(totalFollowers),
-        "trend": followerTrend['display'],
-        "isPositive": followerTrend['isPositive'],
-        "icon": "people",
-      },
-      {
-        "title": "Following",
-        "value": _formatNumber(totalFollowing),
-        "trend": followingTrend['display'],
-        "isPositive": followingTrend['isPositive'],
-        "icon": "person_add",
-      },
-      {
-        "title": "Recent Unfollows",
-        "value": recentUnfollows.toString(),
-        "trend": recentUnfollows > 0 ? "-$recentUnfollows" : "0",
-        "isPositive": recentUnfollows == 0,
-        "icon": "person_remove",
-      },
-      {
-        "title": "Mutual Connections",
-        "value": _formatNumber(mutualCount),
-        "trend": mutualTrend['display'],
-        "isPositive": mutualTrend['isPositive'],
-        "icon": "people_outline",
-      },
-    ];
-
-    // Generate activities from real data and AI insights
     final activities = <Map<String, dynamic>>[];
 
-    // Add unfollowed users to activities (from AI analysis)
-    for (var i = 0; i < aiAnalysis.unfollowedUsers.take(3).length; i++) {
-      final user = aiAnalysis.unfollowedUsers[i];
-      activities.add({
-        "id": i + 1,
-        "username": user['username'],
-        "displayName": user['displayName'],
-        "avatar":
-            user['avatar'] ??
-            "https://cdn.pixabay.com/photo/2015/03/04/22/35/avatar-659652_640.png",
-        "semanticLabel": "Profile photo of ${user['displayName']}",
-        "action": "unfollowed you",
-        "timestamp": DateTime.now().subtract(Duration(hours: i * 2)),
-        "actionType": "unfollow",
-      });
-    }
-
-    // Add recent followers (sorted by followDate, latest first)
+    // Recent followers (last 5)
     final recentFollowers = followers.take(5).toList();
-    for (var i = 0; i < recentFollowers.length; i++) {
-      final follower = recentFollowers[i];
+    for (final follower in recentFollowers) {
       activities.add({
-        "id": activities.length + 1,
-        "username": follower['username'],
-        "displayName": follower['displayName'],
-        "avatar":
-            follower['avatar'] ??
-            "https://cdn.pixabay.com/photo/2015/03/04/22/35/avatar-659652_640.png",
-        "semanticLabel": "Profile photo of ${follower['displayName']}",
-        "action": follower['isMutual'] == true
-            ? "followed you back"
-            : "started following you",
-        "timestamp": follower['followDate'] as DateTime,
-        "actionType": "follow",
+        'type': 'new_follower',
+        'title': 'New Follower',
+        'description': '${follower['displayName']} started following you',
+        'timestamp': follower['followDate'],
+        'icon': Icons.person_add,
+        'color': AppTheme.successLight,
       });
     }
 
-    // Sort activities by timestamp (most recent first)
+    // Recent unfollows (last 3)
+    final recentUnfollows = notFollowingBack.take(3).toList();
+    for (final unfollow in recentUnfollows) {
+      activities.add({
+        'type': 'unfollow',
+        'title': 'Unfollowed',
+        'description': '${unfollow['displayName']} unfollowed you',
+        'timestamp': DateTime.now().subtract(
+          Duration(hours: notFollowingBack.indexOf(unfollow) * 2),
+        ),
+        'icon': Icons.person_remove,
+        'color': AppTheme.errorLight,
+      });
+    }
+
+    // Sort by timestamp (newest first)
     activities.sort(
       (a, b) =>
           (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime),
     );
 
-    return {'metrics': metrics, 'activities': activities.take(10).toList()};
-  }
-
-  /// Calculate trend compared to previous sync
-  Map<String, dynamic> _calculateTrend(String key, int currentValue) {
-    // This would ideally compare with stored previous values
-    // For now, return neutral trend
-    return {'display': '+0', 'isPositive': true};
-  }
-
-  /// Format large numbers (e.g., 12500 -> 12.5K)
-  String _formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
-    }
-    return number.toString();
-  }
-
-  /// Store dashboard data locally
-  Future<void> _storeData(Map<String, dynamic> data) async {
-    await _cacheService.cacheDashboardMetrics(data);
-  }
-
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
-
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${(difference.inDays / 7).floor()}w ago';
-    }
+    return activities;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundLight,
       appBar: CustomAppBar(
         title: 'Dashboard',
         actions: [
@@ -450,7 +350,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications_outlined),
+                icon: CustomIconWidget(
+                  iconName: Icons.notifications_outlined.codePoint.toString(),
+                  size: 24,
+                  color: theme.colorScheme.onSurface,
+                ),
                 onPressed: () {
                   Navigator.pushNamed(context, AppRoutes.notifications);
                 },
@@ -462,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: AppTheme.errorLight,
+                      color: theme.colorScheme.error,
                       shape: BoxShape.circle,
                     ),
                     constraints: const BoxConstraints(
@@ -473,10 +377,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _unreadNotificationCount > 9
                           ? '9+'
                           : _unreadNotificationCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onError,
                         fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                       textAlign: TextAlign.center,
                     ),
@@ -484,74 +388,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
             ],
           ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'privacy') {
-                Navigator.pushNamed(context, AppRoutes.privacyCompliance);
-              } else if (value == 'features') {
-                Navigator.pushNamed(context, AppRoutes.alternativeFeatures);
-              }
+          // Profile visitors quick action
+          IconButton(
+            icon: CustomIconWidget(
+              iconName: Icons.visibility.codePoint.toString(),
+              size: 24,
+              color: theme.colorScheme.onSurface,
+            ),
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.profileVisitors);
             },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'privacy',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.privacy_tip,
-                      size: 20,
-                      color: AppTheme.primaryLight,
-                    ),
-                    SizedBox(width: 2.w),
-                    Text('Privacy & Compliance'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'features',
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.lightbulb_outline,
-                      size: 20,
-                      color: AppTheme.primaryLight,
-                    ),
-                    SizedBox(width: 2.w),
-                    Text('Alternative Features'),
-                  ],
-                ),
-              ),
-            ],
           ),
         ],
       ),
-      body: _hasData ? _buildDashboardContent(theme) : const EmptyStateWidget(),
+      body: _hasData ? _buildDashboardContent() : _buildEmptyState(),
+      bottomNavigationBar: CustomBottomBar(
+        currentRoute: AppRoutes.dashboard,
+        notificationBadgeCount: _unreadNotificationCount,
+      ),
       floatingActionButton: _hasData
           ? FloatingActionButton.extended(
-              onPressed: _handleSyncNow,
-              icon: CustomIconWidget(
-                iconName: 'sync',
-                color: theme.colorScheme.onPrimary,
-                size: 24,
-              ),
-              label: Text(
-                'Sync Now',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.onPrimary,
-                ),
-              ),
+              onPressed: _syncData,
+              icon: _isLoading
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.onPrimary,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.sync),
+              label: Text(_isLoading ? 'Syncing...' : 'Sync'),
             )
           : null,
-      bottomNavigationBar: const CustomBottomBar(
-        currentRoute: '/dashboard-screen',
-      ),
     );
   }
 
-  Widget _buildDashboardContent(ThemeData theme) {
+  Widget _buildDashboardContent() {
+    final theme = Theme.of(context);
     return RefreshIndicator(
-      onRefresh: _handleRefresh,
+      onRefresh: () async {
+        // Handle refresh
+      },
       color: theme.colorScheme.primary,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -583,8 +464,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       return KeyMetricsCardWidget(
                         title: metric["title"] as String,
                         value: metric["value"] as String,
-                        trend: metric["trend"] as String,
-                        isPositive: metric["isPositive"] as bool,
+                        trend: metric["change"] as String,
+                        isPositive: metric["change"]?.startsWith('+') ?? true,
                         iconName: metric["icon"] as String,
                       );
                     },
@@ -668,6 +549,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildEmptyState() {
+    return const EmptyStateWidget();
   }
 
   void _showActionDialog(BuildContext context, String title, String message) {

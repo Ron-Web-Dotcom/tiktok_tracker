@@ -182,19 +182,25 @@ class _FollowerGrowthChartWidgetState extends State<FollowerGrowthChartWidget> {
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
-                  maxX: (widget.data.length - 1).toDouble(),
+                  maxX: widget.data.isEmpty
+                      ? 1
+                      : (widget.data.length - 1).toDouble(),
                   minY: 0,
-                  maxY: (widget.data.reduce((a, b) => a > b ? a : b) * 1.2)
-                      .toDouble(),
+                  maxY: widget.data.isEmpty
+                      ? 1
+                      : (widget.data.reduce((a, b) => a > b ? a : b) * 1.2)
+                            .toDouble(),
                   lineBarsData: [
                     LineChartBarData(
-                      spots: List.generate(
-                        widget.data.length,
-                        (index) => FlSpot(
-                          index.toDouble(),
-                          (widget.data[index] as num).toDouble(),
-                        ),
-                      ),
+                      spots: widget.data.isEmpty
+                          ? [const FlSpot(0, 0)]
+                          : List.generate(
+                              widget.data.length,
+                              (index) => FlSpot(
+                                index.toDouble(),
+                                (widget.data[index] as num).toDouble(),
+                              ),
+                            ),
                       isCurved: true,
                       color: theme.colorScheme.primary,
                       barWidth: 3,
@@ -216,7 +222,8 @@ class _FollowerGrowthChartWidgetState extends State<FollowerGrowthChartWidget> {
                       ),
                     ),
                     if (widget.isComparisonMode &&
-                        widget.comparisonData != null)
+                        widget.comparisonData != null &&
+                        widget.comparisonData!.isNotEmpty)
                       LineChartBarData(
                         spots: List.generate(
                           widget.comparisonData!.length,

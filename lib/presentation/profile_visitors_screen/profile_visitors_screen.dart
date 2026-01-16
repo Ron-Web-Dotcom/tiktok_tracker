@@ -65,11 +65,13 @@ class _ProfileVisitorsScreenState extends State<ProfileVisitorsScreen> {
   Future<void> _checkAuthenticationStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final authenticated = prefs.getBool('tiktok_authenticated') ?? false;
+    if (!mounted) return;
     setState(() => _isAuthenticated = authenticated);
   }
 
   /// Load visitor data from TikTok service
   Future<void> _loadVisitorData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -77,6 +79,7 @@ class _ProfileVisitorsScreenState extends State<ProfileVisitorsScreen> {
         timeFilter: _selectedTimeFilter,
       );
 
+      if (!mounted) return;
       setState(() {
         _allVisitors = visitorData['visitors'] as List<Map<String, dynamic>>;
         _analyticsData = visitorData['analytics'] as Map<String, dynamic>;
@@ -84,6 +87,7 @@ class _ProfileVisitorsScreenState extends State<ProfileVisitorsScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _allVisitors = [];
@@ -105,11 +109,13 @@ class _ProfileVisitorsScreenState extends State<ProfileVisitorsScreen> {
 
   /// Refresh visitor data with pull-to-refresh
   Future<void> _refreshVisitorData() async {
+    if (!mounted) return;
     setState(() => _isRefreshing = true);
     HapticFeedback.mediumImpact();
 
     await _loadVisitorData();
 
+    if (!mounted) return;
     setState(() => _isRefreshing = false);
   }
 
@@ -166,6 +172,7 @@ class _ProfileVisitorsScreenState extends State<ProfileVisitorsScreen> {
     try {
       await _tiktokService.followUser(visitor['id'] as String);
 
+      if (!mounted) return;
       setState(() {
         visitor['isFollowing'] = true;
       });

@@ -55,6 +55,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   /// Load notifications from TikTok service
   Future<void> _loadNotifications() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -62,11 +63,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     try {
       final notifications = await _tiktokService.fetchNotifications();
+      if (!mounted) return;
       setState(() {
         _notifications = notifications;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
@@ -190,9 +193,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     });
 
     try {
-      // Get mock data from followers and following screens
-      final followers = _getMockFollowers();
-      final following = _getMockFollowing();
+      // Get real data from TikTok service
+      final tiktokService = TikTokService();
+      final relationships = await tiktokService.fetchFollowerRelationships();
+      final followers =
+          relationships['followers'] as List<Map<String, dynamic>>;
+      final following =
+          relationships['following'] as List<Map<String, dynamic>>;
 
       // Initialize OpenAI client
       final openAIService = OpenAIService();
@@ -234,97 +241,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         );
       }
     }
-  }
-
-  List<Map<String, dynamic>> _getMockFollowers() {
-    return [
-      {
-        "id": "1",
-        "username": "@sarah_creates",
-        "displayName": "Sarah Johnson",
-        "profileImage":
-            "https://images.unsplash.com/photo-1681779279774-79d871470b6f",
-        "followDate": DateTime.now().subtract(const Duration(days: 2)),
-        "isMutual": true,
-        "isVerified": true,
-        "engagementLevel": "high",
-        "followerCount": 125000,
-        "bio": "Content creator | Travel enthusiast",
-      },
-      {
-        "id": "2",
-        "username": "@mike_fitness",
-        "displayName": "Mike Thompson",
-        "profileImage":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_17f9ba51f-1763294104164.png",
-        "followDate": DateTime.now().subtract(const Duration(days: 5)),
-        "isMutual": false,
-        "isVerified": false,
-        "engagementLevel": "medium",
-        "followerCount": 45000,
-        "bio": "Fitness coach | Nutrition expert",
-      },
-      {
-        "id": "3",
-        "username": "@emma_art",
-        "displayName": "Emma Wilson",
-        "profileImage":
-            "https://images.unsplash.com/photo-1681838514810-be92d337bd55",
-        "followDate": DateTime.now().subtract(const Duration(days: 10)),
-        "isMutual": true,
-        "isVerified": true,
-        "engagementLevel": "high",
-        "followerCount": 89000,
-        "bio": "Digital artist | Illustrator",
-      },
-    ];
-  }
-
-  List<Map<String, dynamic>> _getMockFollowing() {
-    return [
-      {
-        "id": 1,
-        "username": "@sarah_creates",
-        "displayName": "Sarah Johnson",
-        "avatar":
-            "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400",
-        "followsBack": true,
-        "lastInteraction": DateTime.now().subtract(const Duration(hours: 3)),
-        "engagementScore": 85,
-        "contentCategory": "Lifestyle",
-        "followDate": DateTime.now().subtract(const Duration(days: 45)),
-        "mutualConnections": 12,
-        "isActive": true,
-      },
-      {
-        "id": 2,
-        "username": "@tech_guru_mike",
-        "displayName": "Michael Chen",
-        "avatar":
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400",
-        "followsBack": false,
-        "lastInteraction": DateTime.now().subtract(const Duration(days: 15)),
-        "engagementScore": 45,
-        "contentCategory": "Technology",
-        "followDate": DateTime.now().subtract(const Duration(days: 120)),
-        "mutualConnections": 3,
-        "isActive": true,
-      },
-      {
-        "id": 4,
-        "username": "@foodie_alex",
-        "displayName": "Alex Thompson",
-        "avatar":
-            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400",
-        "followsBack": false,
-        "lastInteraction": DateTime.now().subtract(const Duration(days: 30)),
-        "engagementScore": 38,
-        "contentCategory": "Food",
-        "followDate": DateTime.now().subtract(const Duration(days: 180)),
-        "mutualConnections": 1,
-        "isActive": false,
-      },
-    ];
   }
 
   void _markAllAsRead() {

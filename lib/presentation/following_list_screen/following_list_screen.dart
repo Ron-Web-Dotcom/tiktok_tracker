@@ -101,15 +101,18 @@ class _FollowingListScreenState extends State<FollowingListScreen>
 
   /// Load following list and AI suggestions from TikTok
   Future<void> _loadRealData() async {
+    if (!mounted) return;
     setState(() => _isLoadingData = true);
 
     try {
       // Fetch real follower relationships from TikTok
       final relationships = await _tiktokService.fetchFollowerRelationships();
       final following =
-          relationships['following'] as List<Map<String, dynamic>>;
+          (relationships['following'] as List?)?.cast<Map<String, dynamic>>() ??
+          [];
       final followers =
-          relationships['followers'] as List<Map<String, dynamic>>;
+          (relationships['followers'] as List?)?.cast<Map<String, dynamic>>() ??
+          [];
 
       // Generate smart suggestions using OpenAI
       final openaiClient = OpenAIClient(_openaiService.dio);
@@ -118,6 +121,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
         following: following,
       );
 
+      if (!mounted) return;
       setState(() {
         // Data is already sorted latest-first from TikTok service
         _followingList = following;
@@ -125,6 +129,7 @@ class _FollowingListScreenState extends State<FollowingListScreen>
         _isLoadingData = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoadingData = false);
 
       if (mounted) {
@@ -212,11 +217,13 @@ class _FollowingListScreenState extends State<FollowingListScreen>
   /// Handle pull-to-refresh gesture
   /// Reloads following list and AI suggestions
   Future<void> _handleRefresh() async {
+    if (!mounted) return;
     setState(() => _isRefreshing = true);
     HapticFeedback.mediumImpact();
 
     await _loadRealData();
 
+    if (!mounted) return;
     setState(() => _isRefreshing = false);
 
     if (mounted) {

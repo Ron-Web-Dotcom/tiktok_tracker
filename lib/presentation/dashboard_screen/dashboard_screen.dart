@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../services/cache_service.dart';
@@ -41,6 +42,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Loading state - shows spinner when fetching data
   bool _isLoading = false;
 
+  // Atomic lock to prevent race conditions in sync operations
+  bool _isSyncing = false;
+
   // Whether user has synced data at least once
   bool _hasData = false;
 
@@ -63,6 +67,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Key metrics displayed at the top
   List<Map<String, dynamic>> _keyMetrics = [];
 
+  // Demo mode disclaimer visibility
+  bool _showDemoDisclaimer = true;
+
   @override
   void initState() {
     super.initState();
@@ -82,18 +89,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .where((n) => n['isRead'] == false)
           .length;
 
-      if (mounted) {
-        setState(() {
-          _unreadNotificationCount = unreadCount;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationCount = unreadCount;
+      });
     } catch (e) {
       // Silent fail - notification count is not critical
-      if (mounted) {
-        setState(() {
-          _unreadNotificationCount = 0;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationCount = 0;
+      });
     }
   }
 
@@ -111,15 +116,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final lastUpdatedStr = prefs.getString('last_updated');
 
         if (cachedMetrics != null) {
+          if (!mounted) return;
           setState(() {
             _hasData = true;
             _metrics =
                 (cachedMetrics['metrics'] as List?)
                     ?.cast<Map<String, dynamic>>() ??
                 [];
-            _activities = cachedActivities.cast<Map<String, dynamic>>();
+            _activities =
+                (cachedActivities as List?)?.cast<Map<String, dynamic>>() ?? [];
             _lastUpdated = lastUpdatedStr != null
-                ? DateTime.parse(lastUpdatedStr)
+                ? DateTime.tryParse(lastUpdatedStr) ?? DateTime.now()
                 : DateTime.now();
             _keyMetrics = _buildKeyMetrics();
           });
@@ -185,9 +192,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Sync data from TikTok
   /// This is the main data fetching operation
   Future<void> _syncData() async {
-    // Prevent multiple simultaneous syncs
-    if (_isLoading) return;
+    // Prevent multiple simultaneous syncs with atomic lock
+    if (_isSyncing) return;
+    _isSyncing = true;
 
+    if (!mounted) {
+      _isSyncing = false;
+      return;
+    }
     setState(() => _isLoading = true);
 
     // Vibrate phone for feedback
@@ -197,17 +209,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Fetch follower relationships from TikTok
       final relationships = await _tiktokService.fetchFollowerRelationships();
 
-      // Extract data
+      // Extract data with null-safe casting
       final followers =
-          relationships['followers'] as List<Map<String, dynamic>>;
+          (relationships['followers'] as List?)?.cast<Map<String, dynamic>>() ??
+          [];
       final following =
-          relationships['following'] as List<Map<String, dynamic>>;
+          (relationships['following'] as List?)?.cast<Map<String, dynamic>>() ??
+          [];
       final notFollowingBack =
-          relationships['notFollowingBack'] as List<Map<String, dynamic>>;
+          (relationships['notFollowingBack'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [];
       final notFollowedBack =
-          relationships['notFollowedBack'] as List<Map<String, dynamic>>;
+          (relationships['notFollowedBack'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [];
       final mutualConnections =
-          relationships['mutualConnections'] as List<Map<String, dynamic>>;
+          (relationships['mutualConnections'] as List?)
+              ?.cast<Map<String, dynamic>>() ??
+          [];
+
+      // Calculate weekly trends from real data
+      final weeklyFollowers = _calculateWeeklyTrend(followers);
+      final weeklyUnfollows = _calculateWeeklyUnfollows(notFollowingBack);
 
       // Build metrics cards
       final newMetrics = [
@@ -217,6 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'change': '+${(followers.length * 0.05).toInt()}',
           'icon': Icons.people,
           'color': AppTheme.primaryLight,
+          'weeklyData': weeklyFollowers,
         },
         {
           'title': 'Following',
@@ -231,6 +256,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           'change': '-${(notFollowingBack.length * 0.1).toInt()}',
           'icon': Icons.person_remove,
           'color': AppTheme.errorLight,
+          'weeklyData': weeklyUnfollows,
         },
         {
           'title': 'Mutual Connections',
@@ -258,6 +284,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await prefs.setString('last_updated', DateTime.now().toIso8601String());
 
       // Update UI
+      if (!mounted) return;
       setState(() {
         _hasData = true;
         _metrics = newMetrics;
@@ -278,6 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       // Show error message
@@ -290,7 +318,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         );
       }
+    } finally {
+      _isSyncing = false;
     }
+  }
+
+  /// Calculate weekly follower trend from real data
+  List<double> _calculateWeeklyTrend(List<Map<String, dynamic>> followers) {
+    final now = DateTime.now();
+    final weeklyData = List<double>.filled(7, 0);
+
+    for (var follower in followers) {
+      final followDate = follower['followDate'] as DateTime;
+      final daysDiff = now.difference(followDate).inDays;
+
+      if (daysDiff < 7) {
+        weeklyData[6 - daysDiff]++;
+      }
+    }
+
+    // Convert to cumulative growth
+    for (int i = 1; i < weeklyData.length; i++) {
+      weeklyData[i] += weeklyData[i - 1];
+    }
+
+    return weeklyData;
+  }
+
+  /// Calculate weekly unfollow trend from real data
+  List<double> _calculateWeeklyUnfollows(
+    List<Map<String, dynamic>> notFollowingBack,
+  ) {
+    final now = DateTime.now();
+    final weeklyData = List<double>.filled(7, 0);
+
+    for (var user in notFollowingBack) {
+      final followDate = user['followDate'] as DateTime;
+      final daysDiff = now.difference(followDate).inDays;
+
+      if (daysDiff < 7) {
+        weeklyData[6 - daysDiff]++;
+      }
+    }
+
+    return weeklyData;
   }
 
   /// Build activity timeline from follower data
@@ -437,6 +508,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          // Demo Mode Disclaimer Banner
+          if (_showDemoDisclaimer)
+            SliverToBoxAdapter(
+              child: Container(
+                margin: EdgeInsets.all(3.w),
+                padding: EdgeInsets.all(3.w),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12.0),
+                  border: Border.all(color: Colors.orange.shade200, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange.shade700,
+                      size: 20,
+                    ),
+                    SizedBox(width: 2.w),
+                    Expanded(
+                      child: Text(
+                        '⚠️ DEMO MODE: Using simulated data for demonstration purposes',
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 18,
+                        color: Colors.orange.shade700,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showDemoDisclaimer = false;
+                        });
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           // Key Metrics Section
           SliverToBoxAdapter(
             child: Column(
@@ -462,11 +580,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     itemBuilder: (context, index) {
                       final metric = _keyMetrics[index];
                       return KeyMetricsCardWidget(
-                        title: metric["title"] as String,
-                        value: metric["value"] as String,
-                        trend: metric["change"] as String,
-                        isPositive: metric["change"]?.startsWith('+') ?? true,
-                        iconName: metric["icon"] as String,
+                        title: metric["title"] as String? ?? '',
+                        value: metric["value"] as String? ?? '0',
+                        trend: (metric["change"] as String?) ?? '+0',
+                        isPositive:
+                            (metric["change"] as String?)?.startsWith('+') ??
+                            true,
+                        iconName:
+                            (metric["icon"] as IconData?)?.codePoint
+                                .toString() ??
+                            Icons.help_outline.codePoint.toString(),
                       );
                     },
                   ),
@@ -476,7 +599,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
 
           // Quick Stats Section
-          const SliverToBoxAdapter(child: QuickStatsWidget()),
+          SliverToBoxAdapter(
+            child: _hasData && _metrics.isNotEmpty
+                ? QuickStatsWidget(
+                    weeklyFollowers:
+                        (_metrics.firstWhere(
+                                      (m) => m['title'] == 'Total Followers',
+                                      orElse: () => {
+                                        'weeklyData': [
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                        ],
+                                      },
+                                    )['weeklyData']
+                                    as List<dynamic>? ??
+                                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            .cast<double>(),
+                    weeklyUnfollows:
+                        (_metrics.firstWhere(
+                                      (m) => m['title'] == 'Unfollows',
+                                      orElse: () => {
+                                        'weeklyData': [
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                          0.0,
+                                        ],
+                                      },
+                                    )['weeklyData']
+                                    as List<dynamic>? ??
+                                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+                            .cast<double>(),
+                  )
+                : const SizedBox.shrink(),
+          ),
 
           // Activity Timeline Section
           SliverToBoxAdapter(

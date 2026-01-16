@@ -11,6 +11,7 @@ import '../presentation/notifications_screen/notifications_screen.dart';
 import '../presentation/privacy_compliance_screen/privacy_compliance_screen.dart';
 import '../presentation/alternative_features_screen/alternative_features_screen.dart';
 import '../presentation/profile_visitors_screen/profile_visitors_screen.dart';
+import '../presentation/privacy_policy_screen/privacy_policy_screen.dart';
 
 /// Central routing configuration for the TikTok Tracker app
 /// This class manages all screen navigation paths
@@ -38,6 +39,8 @@ class AppRoutes {
       '/alternative-features-screen'; // Alternative Features
   static const String profileVisitors =
       '/profile-visitors-screen'; // Profile Visitors
+  static const String privacyPolicy =
+      '/privacy-policy-screen'; // Privacy Policy
 
   /// Map of route paths to their corresponding screen widgets
   /// Used by MaterialApp to navigate between screens
@@ -55,5 +58,6 @@ class AppRoutes {
     privacyCompliance: (context) => const PrivacyComplianceScreen(),
     alternativeFeatures: (context) => const AlternativeFeaturesScreen(),
     profileVisitors: (context) => const ProfileVisitorsScreen(),
+    privacyPolicy: (context) => const PrivacyPolicyScreen(),
   };
 }

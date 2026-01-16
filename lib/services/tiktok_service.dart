@@ -182,12 +182,15 @@ class TikTokService {
         );
       }
       // Handle network errors
+      String? errorMessage;
+      if (e.response?.data is Map<String, dynamic>) {
+        errorMessage =
+            (e.response!.data as Map<String, dynamic>)['error']?['message']
+                as String?;
+      }
       throw TikTokException(
         statusCode: e.response?.statusCode ?? 500,
-        message:
-            e.response?.data['error']?['message'] ??
-            e.message ??
-            'Failed to remove follower',
+        message: errorMessage ?? e.message ?? 'Failed to remove follower',
       );
     }
   }
@@ -260,12 +263,14 @@ class TikTokService {
               'Insufficient permissions. This action requires additional TikTok API scopes.',
         );
       }
+      String? errorMessage;
+      if (e.response?.data is Map) {
+        errorMessage =
+            (e.response!.data as Map)['error']?['message'] as String?;
+      }
       throw TikTokException(
         statusCode: e.response?.statusCode ?? 500,
-        message:
-            e.response?.data['error']?['message'] ??
-            e.message ??
-            'Failed to block user',
+        message: errorMessage ?? e.message ?? 'Failed to block user',
       );
     }
   }
@@ -453,12 +458,15 @@ class TikTokService {
         return cachedFollowers;
       }
 
+      String? errorMessage;
+      if (e.response?.data is Map<String, dynamic>) {
+        errorMessage =
+            (e.response!.data as Map<String, dynamic>)['error']?['message']
+                as String?;
+      }
       throw TikTokException(
         statusCode: e.response?.statusCode ?? 500,
-        message:
-            e.response?.data['error']?['message'] ??
-            e.message ??
-            'Failed to fetch followers',
+        message: errorMessage ?? e.message ?? 'Failed to fetch followers',
       );
     }
   }
@@ -546,12 +554,14 @@ class TikTokService {
         return cachedFollowing;
       }
 
+      String? errorMessage;
+      if (e.response?.data is Map) {
+        errorMessage =
+            (e.response!.data as Map)['error']?['message'] as String?;
+      }
       throw TikTokException(
         statusCode: e.response?.statusCode ?? 500,
-        message:
-            e.response?.data['error']?['message'] ??
-            e.message ??
-            'Failed to fetch following',
+        message: errorMessage ?? e.message ?? 'Failed to fetch following',
       );
     }
   }
@@ -794,7 +804,8 @@ class TikTokService {
       'isOwnProfile': true,
       'activityHistory': _generateActivityHistory(relationships),
       'mutualConnections': _extractMutualConnections(relationships),
-      'recentPosts': [],
+      'recentPosts':
+          [], // Would require additional API endpoint for user's videos
     };
   }
 
@@ -808,11 +819,6 @@ class TikTokService {
           statusCode: 401,
           message: 'No access token found. Please login with TikTok.',
         );
-      }
-
-      // For mock/testing mode, return sample data
-      if (accessToken == 'mock_tiktok_access_token_for_testing') {
-        return _generateMockUserProfile();
       }
 
       final response = await _dio.get(
@@ -864,12 +870,14 @@ class TikTokService {
             [], // Would require additional API endpoint for user's videos
       };
     } on DioException catch (e) {
+      String? errorMessage;
+      if (e.response?.data is Map) {
+        errorMessage =
+            (e.response!.data as Map)['error']?['message'] as String?;
+      }
       throw TikTokException(
         statusCode: e.response?.statusCode ?? 500,
-        message:
-            e.response?.data['error']?['message'] ??
-            e.message ??
-            'Failed to fetch user profile',
+        message: errorMessage ?? e.message ?? 'Failed to fetch user profile',
       );
     }
   }
@@ -1404,7 +1412,7 @@ class TikTokService {
       });
     }
 
-    // Add some non-followers (estimated visitors who haven't followed yet)
+    // Add some non-follower visitors (estimated visitors who haven't followed yet)
     final nonFollowerCount = (maxVisitors * 0.3).toInt();
     for (
       int i = 0;

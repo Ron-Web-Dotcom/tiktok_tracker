@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
-import '../../widgets/custom_icon_widget.dart';
 import '../../services/tiktok_service.dart';
 
 /// Login Screen for TikTok Tracker application
@@ -36,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isLoading = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+  bool _showDemoDisclaimer = true;
 
   @override
   void initState() {
@@ -74,30 +74,22 @@ class _LoginScreenState extends State<LoginScreen>
 
       // Check if real credentials are available
       if (clientKey.isEmpty || clientSecret.isEmpty) {
-        // Use mock authentication for demo
-        await _handleMockAuthentication();
-        return;
+        throw Exception(
+          'TikTok API credentials not configured. Please add TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET to your environment variables.',
+        );
       }
 
-      // ⚠️ TODO: Implement real OAuth flow
-      // For now, using mock authentication until OAuth is fully configured
-      // Real implementation would use:
-      // final result = await FlutterWebAuth.authenticate(
-      //   url: 'https://www.tiktok.com/auth/authorize/?client_key=$clientKey&scope=user.info.basic,video.list&response_type=code&redirect_uri=tiktoktracker://auth/callback',
-      //   callbackUrlScheme: 'tiktoktracker',
-      // );
-      // final code = Uri.parse(result).queryParameters['code'];
-      // final accessToken = await _exchangeCodeForToken(code, clientKey, clientSecret);
-
-      await _handleMockAuthentication();
+      // Implement real OAuth flow
+      // Note: This requires flutter_web_auth package and proper redirect URI setup
+      // For now, show error that real OAuth needs to be configured
+      throw Exception(
+        'TikTok OAuth flow requires additional setup. Please configure redirect URI and implement OAuth 2.0 flow.',
+      );
     } catch (e) {
       if (!mounted) return;
 
       setState(() => _isLoading = false);
-      _showErrorDialog(
-        'Authentication Failed',
-        'Unable to connect to TikTok. Please try again later.',
-      );
+      _showErrorDialog('Authentication Failed', e.toString());
     }
   }
 
@@ -250,45 +242,98 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight:
-                    100.h -
-                    MediaQuery.of(context).padding.top -
-                    MediaQuery.of(context).padding.bottom,
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 6.w),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
+          children: [
+            // Demo Mode Disclaimer Banner
+            if (_showDemoDisclaimer)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.orange.shade200, width: 1),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    Column(
-                      children: [
-                        SizedBox(height: 8.h),
-                        _buildAppLogo(theme),
-                        SizedBox(height: 4.h),
-                        _buildWelcomeText(theme),
-                        SizedBox(height: 6.h),
-                        _buildAuthenticationSection(theme),
-                      ],
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.orange.shade700,
+                      size: 20.sp,
                     ),
-                    Column(
-                      children: [
-                        _buildTrustSignals(theme),
-                        SizedBox(height: 2.h),
-                        _buildComplianceLinks(theme),
-                        SizedBox(height: 3.h),
-                      ],
+                    SizedBox(width: 3.w),
+                    Expanded(
+                      child: Text(
+                        '⚠️ DEMO MODE: This app uses simulated data for demonstration purposes. Real TikTok integration requires approved API access.',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          color: Colors.orange.shade900,
+                          fontWeight: FontWeight.w600,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        size: 18.sp,
+                        color: Colors.orange.shade700,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showDemoDisclaimer = false;
+                        });
+                      },
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
                   ],
                 ),
               ),
+            Expanded(
+              child: FadeTransition(
+                opacity: _fadeAnimation,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight:
+                          100.h -
+                          MediaQuery.of(context).padding.top -
+                          MediaQuery.of(context).padding.bottom,
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 6.w),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            children: [
+                              SizedBox(height: 8.h),
+                              _buildAppLogo(theme),
+                              SizedBox(height: 4.h),
+                              _buildWelcomeText(theme),
+                              SizedBox(height: 6.h),
+                              _buildAuthenticationSection(theme),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              _buildTrustSignals(theme),
+                              SizedBox(height: 2.h),
+                              _buildComplianceLinks(theme),
+                              SizedBox(height: 3.h),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -297,28 +342,38 @@ class _LoginScreenState extends State<LoginScreen>
   /// Builds app logo with brand recognition
   Widget _buildAppLogo(ThemeData theme) {
     return Container(
-      width: 30.w,
-      height: 30.w,
+      width: 24.w,
+      height: 24.w,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            Colors.white.withValues(alpha: 0.95),
+            Colors.white.withValues(alpha: 0.8),
+          ],
         ),
-        borderRadius: BorderRadius.circular(6.w),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 30,
+            spreadRadius: 2,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: theme.colorScheme.primary.withValues(alpha: 0.2),
+            blurRadius: 40,
+            spreadRadius: -8,
           ),
         ],
       ),
-      child: Center(
-        child: CustomIconWidget(
-          iconName: 'music_note',
-          color: theme.colorScheme.onPrimary,
-          size: 15.w,
+      padding: EdgeInsets.all(2.5.w),
+      child: ClipOval(
+        child: CustomImageWidget(
+          imageUrl: 'assets/images/IMG_0007-1767820455546.png',
+          width: 19.w,
+          height: 19.w,
+          fit: BoxFit.cover,
+          semanticLabel: 'TikTok Tracker logo',
         ),
       ),
     );
@@ -369,22 +424,46 @@ class _LoginScreenState extends State<LoginScreen>
             ),
             child: _isLoading
                 ? SizedBox(
-                    width: 5.w,
                     height: 5.w,
+                    width: 5.w,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        theme.colorScheme.onPrimary,
-                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
                 : Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CustomIconWidget(
-                        iconName: 'music_note',
-                        color: Colors.white,
-                        size: 5.w,
+                      Container(
+                        width: 12.w,
+                        height: 12.w,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              Colors.white.withValues(alpha: 0.95),
+                              Colors.white.withValues(alpha: 0.85),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 15,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        padding: EdgeInsets.all(1.5.w),
+                        child: ClipOval(
+                          child: CustomImageWidget(
+                            imageUrl:
+                                'assets/images/IMG_0007-1767820455546.png',
+                            width: 9.w,
+                            height: 9.w,
+                            fit: BoxFit.cover,
+                            semanticLabel: 'TikTok icon',
+                          ),
+                        ),
                       ),
                       SizedBox(width: 3.w),
                       Text(

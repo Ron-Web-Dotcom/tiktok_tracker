@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -51,10 +53,15 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   // Service to communicate with TikTok API
   final TikTokService _tiktokService = TikTokService();
 
+  // Debounce timers
+  Timer? _searchDebounce;
+  Timer? _scrollDebounce;
+
   // Loading states
   bool _isLoading = true; // Initial data load
   bool _isRefreshing = false; // Pull-to-refresh
   bool _isMultiSelectMode = false; // Batch selection mode
+  bool _isLoadingMore = false; // Infinite scroll loading
 
   // Current search query
   String _searchQuery = '';
@@ -87,6 +94,8 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   @override
   void dispose() {
     // Clean up controllers when screen is closed
+    _searchDebounce?.cancel();
+    _scrollDebounce?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -94,14 +103,17 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
 
   /// Load followers from TikTok API
   Future<void> _loadRealData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
       // Fetch real follower relationships from TikTok
       final relationships = await _tiktokService.fetchFollowerRelationships();
       final followers =
-          relationships['followers'] as List<Map<String, dynamic>>;
+          (relationships['followers'] as List?)?.cast<Map<String, dynamic>>() ??
+          [];
 
+      if (!mounted) return;
       setState(() {
         // Data is already sorted latest-first from TikTok service
         _allFollowers = followers;
@@ -109,6 +121,7 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (mounted) {
@@ -126,19 +139,27 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   /// Detect when user scrolls near bottom of list
   /// Triggers loading more followers (infinite scroll)
   void _onScroll() {
-    // Infinite scroll implementation
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _loadMoreFollowers();
-    }
+    // Debounce scroll events to prevent excessive calls
+    _scrollDebounce?.cancel();
+    _scrollDebounce = Timer(const Duration(milliseconds: 200), () {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore) {
+          _loadMoreFollowers();
+        }
+      }
+    });
   }
 
   /// Called whenever search text changes
   /// Waits 300ms after user stops typing before searching
   /// (This is called "debouncing" - prevents searching on every keystroke)
   void _onSearchChanged() {
-    // Debounced search
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // Cancel previous timer
+    _searchDebounce?.cancel();
+    // Start new timer
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
       if (_searchController.text == _searchQuery) return;
       setState(() {
         _searchQuery = _searchController.text;
@@ -168,8 +189,9 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
         if (_activeFilters.isNotEmpty) {
           // Date range filter
           if (_activeFilters.containsKey('dateRange')) {
-            final dateRange = _activeFilters['dateRange'] as String;
-            final followDate = follower['followDate'] as DateTime;
+            final dateRange = _activeFilters['dateRange'] as String?;
+            final followDate = follower['followDate'] as DateTime?;
+            if (dateRange == null || followDate == null) return false;
             final now = DateTime.now();
 
             switch (dateRange) {
@@ -269,10 +291,12 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   /// Handle pull-to-refresh gesture
   /// Reloads followers from TikTok
   Future<void> _refreshFollowers() async {
+    if (!mounted) return;
     setState(() => _isRefreshing = true);
 
     await _loadRealData();
 
+    if (!mounted) return;
     setState(() => _isRefreshing = false);
     if (mounted) {
       HapticFeedback.mediumImpact();
@@ -282,14 +306,16 @@ class _FollowersListScreenState extends State<FollowersListScreen> {
   /// Load more followers when user scrolls to bottom
   /// (Currently simulated - would load next page in production)
   Future<void> _loadMoreFollowers() async {
-    if (_isLoading) return;
+    if (_isLoadingMore) return;
 
-    setState(() => _isLoading = true);
+    if (!mounted) return;
+    setState(() => _isLoadingMore = true);
 
     // Simulate loading more data
     await Future.delayed(const Duration(seconds: 1));
 
-    setState(() => _isLoading = false);
+    if (!mounted) return;
+    setState(() => _isLoadingMore = false);
   }
 
   void _showFilterBottomSheet() {

@@ -120,8 +120,10 @@ class _UnfollowPatternChartWidgetState
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
-                  maxY: (widget.data.reduce((a, b) => a > b ? a : b) * 1.3)
-                      .toDouble(),
+                  maxY: widget.data.isEmpty
+                      ? 1
+                      : (widget.data.reduce((a, b) => a > b ? a : b) * 1.3)
+                            .toDouble(),
                   barTouchData: BarTouchData(
                     enabled: true,
                     touchCallback:
@@ -216,24 +218,28 @@ class _UnfollowPatternChartWidgetState
                       );
                     },
                   ),
-                  barGroups: List.generate(
-                    widget.data.length,
-                    (index) => BarChartGroupData(
-                      x: index,
-                      barRods: [
-                        BarChartRodData(
-                          toY: (widget.data[index] as num).toDouble(),
-                          color: _touchedIndex == index
-                              ? AppTheme.errorLight
-                              : AppTheme.errorLight.withValues(alpha: 0.7),
-                          width: 16,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4),
+                  barGroups: widget.data.isEmpty
+                      ? []
+                      : List.generate(
+                          widget.data.length,
+                          (index) => BarChartGroupData(
+                            x: index,
+                            barRods: [
+                              BarChartRodData(
+                                toY: (widget.data[index] as num).toDouble(),
+                                color: _touchedIndex == index
+                                    ? AppTheme.errorLight
+                                    : AppTheme.errorLight.withValues(
+                                        alpha: 0.7,
+                                      ),
+                                width: 16,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(4),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
                 ),
               ),
             ),

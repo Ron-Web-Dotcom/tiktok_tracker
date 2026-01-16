@@ -82,6 +82,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   /// 3. If no cache or expired, fetch from TikTok and analyze with AI
   /// 4. Cache the new results for future use
   Future<void> _loadAnalytics() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {

@@ -38,6 +38,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _hasError = false;
@@ -115,6 +116,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
   }
 
   Future<void> _loadProfile() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -122,6 +124,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       final cachedProfile = await _cacheService.getCachedUserProfile();
 
       if (cachedProfile != null) {
+        if (!mounted) return;
         setState(() {
           _profileData = cachedProfile;
           _isLoading = false;
@@ -134,6 +137,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       // Cache the profile data
       await _cacheService.cacheUserProfile(profile);
 
+      if (!mounted) return;
       setState(() {
         _profileData = profile;
         _isLoading = false;
@@ -142,11 +146,13 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> {
       // Use cached data on error
       final cachedProfile = await _cacheService.getCachedUserProfile();
       if (cachedProfile != null) {
+        if (!mounted) return;
         setState(() {
           _profileData = cachedProfile;
           _isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

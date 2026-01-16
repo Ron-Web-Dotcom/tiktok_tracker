@@ -178,18 +178,22 @@ class _EngagementCorrelationChartWidgetState
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
-                  maxX: (widget.data.length - 1).toDouble(),
+                  maxX: widget.data.isEmpty
+                      ? 1
+                      : (widget.data.length - 1).toDouble(),
                   minY: 0,
-                  maxY: 6,
+                  maxY: widget.data.isEmpty ? 1 : 6,
                   lineBarsData: [
                     LineChartBarData(
-                      spots: List.generate(
-                        widget.data.length,
-                        (index) => FlSpot(
-                          index.toDouble(),
-                          (widget.data[index] as num).toDouble(),
-                        ),
-                      ),
+                      spots: widget.data.isEmpty
+                          ? [const FlSpot(0, 0)]
+                          : List.generate(
+                              widget.data.length,
+                              (index) => FlSpot(
+                                index.toDouble(),
+                                (widget.data[index] as num).toDouble(),
+                              ),
+                            ),
                       isCurved: true,
                       color: AppTheme.successLight,
                       barWidth: 3,

@@ -6,23 +6,18 @@ import '../../../core/app_export.dart';
 /// Quick stats widget with sparkline charts
 /// Displays weekly/monthly trends in compact format
 class QuickStatsWidget extends StatelessWidget {
-  const QuickStatsWidget({super.key});
+  final List<double> weeklyFollowers;
+  final List<double> weeklyUnfollows;
+
+  const QuickStatsWidget({
+    super.key,
+    required this.weeklyFollowers,
+    required this.weeklyUnfollows,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Mock data for weekly trends
-    final List<double> weeklyFollowers = [
-      8.2,
-      9.1,
-      8.8,
-      10.2,
-      11.5,
-      12.1,
-      12.5,
-    ];
-    final List<double> weeklyUnfollows = [15, 12, 18, 10, 8, 5, 3];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
@@ -125,18 +120,28 @@ class QuickStatsWidget extends StatelessWidget {
                         titlesData: const FlTitlesData(show: false),
                         borderData: FlBorderData(show: false),
                         minX: 0,
-                        maxX: 6,
-                        minY: 7,
-                        maxY: 13,
+                        maxX: weeklyFollowers.isEmpty
+                            ? 1
+                            : (weeklyFollowers.length - 1).toDouble(),
+                        minY: weeklyFollowers.isEmpty
+                            ? 0
+                            : weeklyFollowers.reduce((a, b) => a < b ? a : b) -
+                                  1,
+                        maxY: weeklyFollowers.isEmpty
+                            ? 1
+                            : weeklyFollowers.reduce((a, b) => a > b ? a : b) +
+                                  1,
                         lineBarsData: [
                           LineChartBarData(
-                            spots: List.generate(
-                              weeklyFollowers.length,
-                              (index) => FlSpot(
-                                index.toDouble(),
-                                weeklyFollowers[index],
-                              ),
-                            ),
+                            spots: weeklyFollowers.isEmpty
+                                ? [const FlSpot(0, 0)]
+                                : List.generate(
+                                    weeklyFollowers.length,
+                                    (index) => FlSpot(
+                                      index.toDouble(),
+                                      weeklyFollowers[index],
+                                    ),
+                                  ),
                             isCurved: true,
                             color: AppTheme.successLight,
                             barWidth: 3,
@@ -255,18 +260,28 @@ class QuickStatsWidget extends StatelessWidget {
                         titlesData: const FlTitlesData(show: false),
                         borderData: FlBorderData(show: false),
                         minX: 0,
-                        maxX: 6,
-                        minY: 0,
-                        maxY: 20,
+                        maxX: weeklyUnfollows.isEmpty
+                            ? 1
+                            : (weeklyUnfollows.length - 1).toDouble(),
+                        minY: weeklyUnfollows.isEmpty
+                            ? 0
+                            : weeklyUnfollows.reduce((a, b) => a < b ? a : b) -
+                                  1,
+                        maxY: weeklyUnfollows.isEmpty
+                            ? 1
+                            : weeklyUnfollows.reduce((a, b) => a > b ? a : b) +
+                                  1,
                         lineBarsData: [
                           LineChartBarData(
-                            spots: List.generate(
-                              weeklyUnfollows.length,
-                              (index) => FlSpot(
-                                index.toDouble(),
-                                weeklyUnfollows[index],
-                              ),
-                            ),
+                            spots: weeklyUnfollows.isEmpty
+                                ? [const FlSpot(0, 0)]
+                                : List.generate(
+                                    weeklyUnfollows.length,
+                                    (index) => FlSpot(
+                                      index.toDouble(),
+                                      weeklyUnfollows[index],
+                                    ),
+                                  ),
                             isCurved: true,
                             color: theme.colorScheme.primary,
                             barWidth: 3,

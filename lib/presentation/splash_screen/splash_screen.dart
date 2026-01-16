@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
-import '../../widgets/custom_icon_widget.dart';
 
 /// Splash Screen for TikTok Tracker application
 ///
@@ -229,21 +228,43 @@ class _SplashScreenState extends State<SplashScreen>
             width: 28.w,
             height: 28.w,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
               shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.black.withValues(alpha: 0.95),
+                  Colors.black.withValues(alpha: 0.85),
+                  Colors.black.withValues(alpha: 0.7),
+                ],
+                stops: const [0.0, 0.7, 1.0],
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 20,
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 40,
                   spreadRadius: 5,
+                  offset: const Offset(0, 8),
+                ),
+                BoxShadow(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                  blurRadius: 60,
+                  spreadRadius: -10,
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  blurRadius: 20,
+                  spreadRadius: -5,
+                  offset: const Offset(0, -5),
                 ),
               ],
             ),
-            child: Center(
-              child: CustomIconWidget(
-                iconName: 'analytics',
-                size: 14.w,
-                color: theme.colorScheme.primary,
+            padding: EdgeInsets.all(3.w),
+            child: ClipOval(
+              child: CustomImageWidget(
+                imageUrl: 'assets/images/IMG_0007-1767820455546.png',
+                width: 22.w,
+                height: 22.w,
+                fit: BoxFit.cover,
+                semanticLabel: 'TikTok Tracker app logo',
               ),
             ),
           ),
